@@ -7,6 +7,8 @@
     <title>BoolVideo Log Parser</title>
     <!-- Markdown 解析器 -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 美化 JSON -->
+    <script defer src="https://unpkg.com/pretty-json-custom-element/index.js"></script>
     <!-- 代码高亮样式 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
@@ -70,9 +72,19 @@
             color: var(--primary-color);
         }
 
-        #toc-list .sub-link {
+        #toc-list .h2 {
             padding-left: 24px;
             font-size: 0.85rem;
+        }
+
+        #toc-list .h3 {
+            padding-left: 36px;
+            font-size: 0.8rem;
+        }
+
+        #toc-list .h4 {
+            padding-left: 48px;
+            font-size: 0.75rem;
         }
 
         /* 主内容区 */
@@ -283,6 +295,66 @@
 
     <script>
         // ==========================================
+        // JSON 树形视图生成器 (核心新增功能)
+        // ==========================================
+
+        /**
+         * 构建一个交互式的 JSON 树 DOM
+         * @param {any} data - JSON 数据
+         * @param {boolean} isRoot - 是否为根节点
+         * @returns {HTMLElement}
+         */
+        function createJsonTree(data, isRoot = true) {
+            const container = document.createElement('pretty-json');
+            container.setAttribute('expand', "5"); // 默认展开 5 层
+            container.textContent = JSON.stringify(data);
+            return container;
+        }
+
+        /**
+        * 清洗数据：移除 Markdown 代码块标记 (```json ... ```)
+        * @param {string|object} input - 可能是原始对象，也可能是带标记的字符串
+        * @returns {string|object} - 清洗后的 JSON 字符串或原始对象
+        */
+        function cleanJsonMarkdown(input) {
+            // 1. 如果输入已经是对象或数组（已经被解析过），直接返回，不做处理
+            if (input && typeof input === 'object') {
+                return input;
+            }
+
+            // 2. 确保输入是字符串，并去除首尾空白
+            let str = String(input || '').trim();
+
+            // 3. 正则表达式匹配
+            // ^```             : 匹配开头的 \`\`\`
+            // (?:json|JSON)?   : 匹配可选的 json 或 JSON 标记 (非捕获组)
+            // \s*              : 匹配标记后的换行或空白
+            // ([\s\S]*?)       : 捕获中间的所有内容（非贪婪模式，[\s\S] 匹配包括换行在内的所有字符）
+            // \s*              : 匹配结尾前的空白
+            // ```$             : 匹配结尾的 \`\`\`
+            const pattern = /^\\`\\`\\`(?:json|JSON)?\s*([\s\S]*?)\s*\\`\\`\\`$/;
+
+            const match = str.match(pattern);
+
+            if (match) {
+                // 如果匹配成功，返回捕获到的中间内容（即纯净的 JSON 字符串）
+                return match[1].trim();
+            }
+
+            // 4. 兜底逻辑：有些畸形数据可能只有开头没有结尾，或者有开头但正则没匹配上
+            // 如果字符串确实以 ``` 开头，我们手动剥离
+            if (str.startsWith('\\`\\`\\`')) {
+                return str
+                    .replace(/^\\`\\`\\`(?:json|JSON)?\s*/, '') // 去头
+                    .replace(/\s*\\`\\`\\`$/, '')               // 去尾
+                    .trim();
+            }
+
+            // 5. 如果本身就是纯净的字符串（没有 markdown 标记），原样返回
+            return str;
+        }
+
+        // ==========================================
         // 1. 核心逻辑：Python 脚本移植
         // ==========================================
 
@@ -395,12 +467,14 @@
                 }
                 // 否则 dump
                 let text = JSON.stringify(value, null, 2);
-                return text.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/```/g, '\\`\\`\\`');
+                // return text.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/```/g, '\\`\\`\\`');
+                return text.replace(/```/g, '\\`\\`\\`');
             }
 
             if (typeof value === 'object') {
                 let text = JSON.stringify(value, null, 2);
-                return text.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/```/g, '\\`\\`\\`');
+                // return text.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/```/g, '\\`\\`\\`');
+                return text.replace(/```/g, '\\`\\`\\`');
             }
 
             return String(value);
@@ -528,7 +602,7 @@
                     mdLines.push("### Prompt");
                     const promptText = prepareOutputText(sec.prompt);
                     if (promptText) {
-                        mdLines.push("```json");
+                        mdLines.push("```");
                         mdLines.push(promptText);
                         mdLines.push("```");
                     } else {
@@ -585,9 +659,40 @@
             // 1. 渲染 HTML
             outputDiv.innerHTML = marked.parse(mdContent);
 
-            // 2. 代码高亮
-            document.querySelectorAll('pre code').forEach((el) => {
-                hljs.highlightElement(el);
+            // 2. 增强处理：寻找 JSON 代码块并替换为交互式树
+            const codeBlocks = outputDiv.querySelectorAll('pre code');
+
+            codeBlocks.forEach((block) => {
+                // 判断是否为 json 类型 (Marked 会加上 class="language-json")
+                // 或者没有 class 但内容看起来像 JSON
+                const isJsonClass = block.classList.contains('language-json');
+                let content = cleanJsonMarkdown(block.textContent.trim());
+
+                let isParsed = false;
+
+                if (isJsonClass || content.startsWith('{') || content.startsWith('[')) {
+                    try {
+                        // 尝试解析
+                        const jsonObj = JSON.parse(content);
+
+                        // 解析成功，生成交互式树
+                        const treeView = createJsonTree(jsonObj);
+
+                        // 替换原有的 pre 元素
+                        // block 是 code, block.parentElement 是 pre
+                        const preTag = block.parentElement;
+                        preTag.replaceWith(treeView);
+                        isParsed = true;
+                    } catch (e) {
+                        // 解析失败，说明不是标准 JSON (可能包含 ... 或 Python 格式打印)，回退到普通高亮
+                        // console.warn("Code block content is not valid JSON, falling back to static highlight.");
+                    }
+                }
+
+                // 如果没有被解析并替换，则执行普通的语法高亮
+                if (!isParsed) {
+                    hljs.highlightElement(block);
+                }
             });
 
             // 3. 生成目录 (TOC)
@@ -596,7 +701,7 @@
 
         function generateTOC() {
             tocList.innerHTML = "";
-            const headers = outputDiv.querySelectorAll('h1, h2');
+            const headers = outputDiv.querySelectorAll('h1, h2, h3, h4, h5, h6, h7');
             if (headers.length === 0) {
                 tocList.innerHTML = '<li style="color:#999; font-size:0.9rem">暂无内容...</li>';
                 return;
@@ -613,9 +718,7 @@
                 a.textContent = header.textContent;
 
                 // 样式区分 H1 和 H2
-                if (header.tagName === 'H2') {
-                    a.classList.add('sub-link');
-                }
+                a.classList.add(header.tagName.toLowerCase());
 
                 // 点击平滑滚动
                 a.onclick = (e) => {
