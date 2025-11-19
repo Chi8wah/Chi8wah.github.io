@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BoolVideo Log Parser</title>
+    <!-- Markdown 解析器 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 代码高亮样式 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-color: #f8fafc;
+            --sidebar-width: 280px;
+            --text-color: #1e293b;
+            --border-color: #e2e8f0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 侧边栏目录 */
+        #sidebar {
+            width: var(--sidebar-width);
+            background: white;
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        #sidebar h3 {
+            margin-top: 0;
+            font-size: 1.1rem;
+        }
+
+        #toc-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        #toc-list li {
+            margin-bottom: 8px;
+        }
+
+        #toc-list a {
+            text-decoration: none;
+            color: #64748b;
+            font-size: 0.9rem;
+            display: block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        #toc-list a:hover,
+        #toc-list a.active {
+            background-color: #eff6ff;
+            color: var(--primary-color);
+        }
+
+        #toc-list .sub-link {
+            padding-left: 24px;
+            font-size: 0.85rem;
+        }
+
+        /* 主内容区 */
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* 顶部控制栏 */
+        #controls {
+            padding: 20px;
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: flex-end;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-group label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #64748b;
+        }
+
+        input,
+        select {
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            min-width: 150px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #1d4ed8;
+        }
+
+        button.secondary {
+            background-color: #64748b;
+        }
+
+        .warn-info {
+            padding: 8px 16px;
+            border: 1px dotted #ef4444;
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        /* 错误提示 */
+        #error-msg {
+            color: #ef4444;
+            background: #fee2e2;
+            padding: 6px 16px;
+            border-radius: 6px;
+            display: none;
+            font-size: 1rem;
+        }
+
+        .toggle-mode {
+            font-size: 0.8rem;
+            color: var(--primary-color);
+            cursor: pointer;
+            margin-left: auto;
+            text-decoration: underline;
+        }
+
+        /* Markdown 内容区 */
+        #content-area {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        /* Markdown 样式重置与美化 */
+        .markdown-body {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .markdown-body h1 {
+            border-bottom: 2px solid #eaecef;
+            padding-bottom: 0.3em;
+        }
+
+        .markdown-body h2 {
+            border-bottom: 1px solid #eaecef;
+            padding-bottom: 0.3em;
+            margin-top: 24px;
+        }
+
+        .markdown-body pre {
+            background: #0d1117;
+            border-radius: 6px;
+            padding: 16px;
+            overflow: auto;
+        }
+
+        .markdown-body code {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        }
+
+        /* JSON 输入模态框（用于CORS绕过） */
+        #json-input-area {
+            display: none;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-family: monospace;
+            resize: vertical;
+        }
+
+        /* 加载动画 */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="sidebar">
+        <h3>目录</h3>
+        <ul id="toc-list">
+            <!-- 动态生成 -->
+            <li style="color:#999; font-size:0.9rem">暂无内容...</li>
+        </ul>
+    </div>
+
+    <div id="main">
+        <div id="controls">
+            <div class="form-group">
+                <label>环境</label>
+                <select id="env-select">
+                    <option value="staging">Staging</option>
+                    <option value="online">Online</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Draft ID(二选一填写)</label>
+                <input type="text" id="draft-id" placeholder="输入 Draft ID">
+            </div>
+            <div class="form-group">
+                <label>Req ID(二选一填写)</label>
+                <input type="text" id="req-id" placeholder="输入 Req ID">
+            </div>
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="text" id="api-key" placeholder="输入 API Key">
+            </div>
+            <button onclick="handleFetch()">请求并解析</button>
+            <div id="error-msg"></div>
+            <div class="warn-info">请求出错时, 请再次确认环境是否正确</div>
+
+            <span class="toggle-mode" onclick="toggleJsonInput()">无法请求？直接粘贴 JSON</span>
+
+            <div id="json-input-area">
+                <div class="form-group" style="width: 100%; margin-top: 10px;">
+                    <label>直接粘贴 Log JSON 内容:</label>
+                    <textarea id="raw-json" placeholder='{"code": 200, "data": [...]}'></textarea>
+                    <button class="secondary" onclick="handleParseLocal()">解析本地 JSON</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-area">
+            <div id="output" class="markdown-body">
+                <p style="text-align: center; color: #94a3b8; margin-top: 50px;">
+                    请在上方输入参数请求日志，或粘贴 JSON 进行解析。
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. 核心逻辑：Python 脚本移植
+        // ==========================================
+
+        // 辅助：解析时间
+        function parseTimeToDt(val) {
+            if (val === null || val === "" || val === undefined) return null;
+
+            // 数字 (秒或毫秒)
+            if (typeof val === 'number') {
+                // 如果 > 1e12 视为毫秒，否则视为秒
+                return val > 1e12 ? new Date(val) : new Date(val * 1000);
+            }
+
+            // 字符串
+            if (typeof val === 'string') {
+                const s = val.trim();
+                // 纯数字字符串
+                if (/^\d+$/.test(s)) {
+                    const n = parseInt(s, 10);
+                    return n > 1e12 ? new Date(n) : new Date(n * 1000);
+                }
+                // ISO 或其他格式，JS Date 构造函数比较强大，先尝试直接解析
+                // 注意：Python 的 fromisoformat 对某些格式支持更好，JS Date 对 ' ' 连接的日期支持不一
+                // 这里做一个简单的归一化：将 ' ' 替换为 'T' 尝试解析
+                let d = new Date(s);
+                if (isNaN(d.getTime())) {
+                    // 尝试替换空格
+                    d = new Date(s.replace(' ', 'T'));
+                }
+                return isNaN(d.getTime()) ? null : d;
+            }
+            return null;
+        }
+
+        // 辅助：格式化时长 (H:MM:SS.sss)
+        function formatDuration(startDt, endDt) {
+            if (!startDt || !endDt) return "";
+            let diffMs = endDt - startDt;
+            const sign = diffMs < 0 ? "-" : "";
+            diffMs = Math.abs(diffMs);
+
+            const totalSeconds = Math.floor(diffMs / 1000);
+            const ms = diffMs % 1000;
+
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            const msStr = ms.toString().padStart(3, '0');
+            const minStr = minutes.toString().padStart(2, '0'); // 如果有小时，分钟要补0
+            const secStr = seconds.toString().padStart(2, '0');
+
+            if (hours > 0) {
+                return `${sign}${hours}:${minStr}:${secStr}.${msStr}`;
+            } else {
+                // Python 逻辑：如果没有小时，分钟不强制补0？python代码里是 {minutes:02d} 还是 {minutes}？
+                // 看 python 代码: if hours > 0: ... else: f"{sign}{minutes}:{seconds_float:06.3f}"
+                // Python 那个 else 分支 minutes 其实没有补0。我们保持一致。
+                return `${sign}${minutes}:${secStr}.${msStr}`;
+            }
+        }
+
+        // 辅助：递归取值
+        function extractValue(value, keyPath) {
+            let temp = value;
+            for (const rk of keyPath) {
+                if (temp && typeof temp === 'object' && !Array.isArray(temp)) {
+                    temp = temp[rk] !== undefined ? temp[rk] : {};
+                } else if (Array.isArray(temp)) {
+                    const collected = [];
+                    for (const item of temp) {
+                        if (item && typeof item === 'object') {
+                            collected.push(item[rk] !== undefined ? item[rk] : "");
+                        } else {
+                            collected.push(item);
+                        }
+                    }
+                    temp = collected;
+                } else {
+                    return "";
+                }
+            }
+            // JS 中空对象 {} 也是 truthy，但逻辑需要判断是否"空"
+            if (typeof temp === 'object' && Object.keys(temp).length === 0) return "";
+            return temp;
+        }
+
+        // 辅助：处理字符串 (Python: _process_string_only)
+        function processStringOnly(s) {
+            if (typeof s !== 'string') return s;
+            // JS replace string 默认只替换第一个，需用正则 /g
+            // python: s.replace('\\"', '"').replace('\\n', '\n').replace('```', '\\`\\`\\`')
+            return s.replace(/\\"/g, '"')
+                .replace(/\\n/g, '\n')
+                .replace(/```/g, '\\`\\`\\`');
+        }
+
+        // 辅助：准备输出文本 (Python: prepare_output_text)
+        function prepareOutputText(value) {
+            if (value === "" || value === null || value === undefined) return "";
+
+            if (typeof value === 'string') {
+                return processStringOnly(value);
+            }
+
+            if (Array.isArray(value)) {
+                // 如果全是字符串
+                if (value.every(i => typeof i === 'string')) {
+                    return value.map(processStringOnly).join("\n\n");
+                }
+                // 否则 dump
+                let text = JSON.stringify(value, null, 2);
+                return text.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/```/g, '\\`\\`\\`');
+            }
+
+            if (typeof value === 'object') {
+                let text = JSON.stringify(value, null, 2);
+                return text.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/```/g, '\\`\\`\\`');
+            }
+
+            return String(value);
+        }
+
+        // 核心逻辑：提取 Sections
+        function extractSectionsFromItem(item) {
+            const contextData = (item.context && item.context.data) ? item.context.data : {};
+
+            const sectionDefs = [
+                { title: "0. 音乐卡点", pattern: /^music_cutting(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "1. 素材分析表", pattern: /^material_analysis(\d+)$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] },
+                { title: "2. 粗略脚本大纲", pattern: /^outline(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "3. 结构化脚本", pattern: /^structured_script(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "4. 生成口播", pattern: /^voiceover_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "5. 生成口播语音及时长", pattern: /^voiceover_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] }, // 这里的正则和 key 可能需要在实际业务中区分，但按 Python 脚本逻辑是一样的
+                { title: "6. 视频时长匹配", pattern: /^duration_match(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "7. 插入画中画", pattern: /^pip(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "8. 插入音效", pattern: /^sound_effect(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "9. 插入贴纸", pattern: /^sicker(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+            ];
+
+            // 1. 获取所有操作前缀
+            const operationPrefixes = new Set();
+            Object.keys(contextData).forEach(key => {
+                let prefix = key.replace("_result", "").replace("_error", "");
+                operationPrefixes.add(prefix);
+            });
+
+            const results = [];
+
+            sectionDefs.forEach(sec => {
+                let promptValue = "";
+                let resultValue = "";
+                let errorValue = "";
+
+                // 寻找匹配的 prefix
+                for (const prefix of operationPrefixes) {
+                    if (sec.pattern.test(prefix)) {
+                        const resultKey = `${prefix}_result`;
+                        const errorKey = `${prefix}_error`;
+
+                        // 获取 Result & Prompt
+                        if (contextData[resultKey]) {
+                            const resultObj = contextData[resultKey];
+                            promptValue = extractValue(resultObj, sec.promptPath);
+                            resultValue = extractValue(resultObj, sec.resultPath);
+                        }
+
+                        // 获取 Error
+                        if (contextData[errorKey]) {
+                            errorValue = contextData[errorKey];
+                        }
+
+                        // 找到一个匹配即跳出当前 section 的循环 (按 Python 逻辑 break)
+                        break;
+                    }
+                }
+                results.push({
+                    title: sec.title,
+                    prompt: promptValue,
+                    result: resultValue,
+                    error: errorValue
+                });
+            });
+
+            return results;
+        }
+
+        // 生成 Markdown 文本
+        function generateMarkdown(dataItems) {
+            const mdLines = [];
+
+            dataItems.forEach((item, idx) => {
+                const instanceId = item.instanceId || item.instanceID || item.id || `item-${idx}`;
+                mdLines.push(`# ${instanceId}`);
+
+                // Info
+                const workflowDefId = item.workflowDefId || "";
+                const status = item.status || "";
+                const startTimeRaw = item.startTime || "";
+                const endTimeRaw = item.endTime || "";
+
+                // Template logic
+                let template = extractValue(item, ["context", "data", "commonDTO", "template"]);
+                let templateName = "";
+                if (typeof template === 'object') {
+                    templateName = template.name || "";
+                } else if (typeof template === 'string') {
+                    try {
+                        const parsed = JSON.parse(template);
+                        templateName = parsed.name || "";
+                    } catch (e) { }
+                }
+                const templateId = extractValue(item, ["context", "data", "commonDTO", "templateId"]);
+
+                // Time Duration
+                const startDt = parseTimeToDt(startTimeRaw);
+                const endDt = parseTimeToDt(endTimeRaw);
+                let genTimeDuration = "";
+                if (startDt && endDt) {
+                    genTimeDuration = formatDuration(startDt, endDt);
+                }
+
+                mdLines.push("## Information");
+                const infoObj = {
+                    workflowDefId,
+                    status,
+                    startTime: startTimeRaw,
+                    endTime: endTimeRaw,
+                    genTimeDuration,
+                    templateName,
+                    templateID: templateId
+                };
+                mdLines.push("```json");
+                mdLines.push(JSON.stringify(infoObj, null, 2));
+                mdLines.push("```");
+                mdLines.push("");
+
+                // Sections
+                const sections = extractSectionsFromItem(item);
+                sections.forEach(sec => {
+                    mdLines.push(`## ${sec.title}`);
+
+                    mdLines.push("### Prompt");
+                    const promptText = prepareOutputText(sec.prompt);
+                    if (promptText) {
+                        mdLines.push("```json");
+                        mdLines.push(promptText);
+                        mdLines.push("```");
+                    } else {
+                        mdLines.push("");
+                    }
+
+                    mdLines.push("### Result");
+                    const resultText = prepareOutputText(sec.result);
+                    if (resultText) {
+                        mdLines.push("```json");
+                        mdLines.push(resultText);
+                        mdLines.push("```");
+                    } else {
+                        mdLines.push("");
+                    }
+
+                    const errorText = prepareOutputText(sec.error);
+                    if (errorText) {
+                        mdLines.push("### Error");
+                        mdLines.push("```"); // Python 脚本里 Error 似乎没有强加 json 标识，直接 ``` 
+                        mdLines.push(errorText);
+                        mdLines.push("```");
+                    }
+                    mdLines.push("");
+                });
+
+                mdLines.push("---");
+                mdLines.push("");
+            });
+
+            return mdLines.join("\n");
+        }
+
+        // ==========================================
+        // 2. 页面交互逻辑
+        // ==========================================
+
+        const outputDiv = document.getElementById('output');
+        const errorMsgDiv = document.getElementById('error-msg');
+        const tocList = document.getElementById('toc-list');
+        const jsonInputArea = document.getElementById('json-input-area');
+
+        function showError(msg) {
+            errorMsgDiv.textContent = `错误: ${msg}`;
+            errorMsgDiv.style.display = 'block';
+            setTimeout(() => errorMsgDiv.style.display = 'none', 8000);
+        }
+
+        function toggleJsonInput() {
+            jsonInputArea.style.display = jsonInputArea.style.display === 'none' || jsonInputArea.style.display === '' ? 'block' : 'none';
+        }
+
+        function renderResult(mdContent) {
+            // 1. 渲染 HTML
+            outputDiv.innerHTML = marked.parse(mdContent);
+
+            // 2. 代码高亮
+            document.querySelectorAll('pre code').forEach((el) => {
+                hljs.highlightElement(el);
+            });
+
+            // 3. 生成目录 (TOC)
+            generateTOC();
+        }
+
+        function generateTOC() {
+            tocList.innerHTML = "";
+            const headers = outputDiv.querySelectorAll('h1, h2');
+            if (headers.length === 0) {
+                tocList.innerHTML = '<li style="color:#999; font-size:0.9rem">暂无内容...</li>';
+                return;
+            }
+
+            headers.forEach((header, index) => {
+                // 为 header 添加 ID 方便跳转
+                const anchorId = `heading-${index}`;
+                header.id = anchorId;
+
+                const li = document.createElement('li');
+                const a = document.createElement('a');
+                a.href = `#${anchorId}`;
+                a.textContent = header.textContent;
+
+                // 样式区分 H1 和 H2
+                if (header.tagName === 'H2') {
+                    a.classList.add('sub-link');
+                }
+
+                // 点击平滑滚动
+                a.onclick = (e) => {
+                    e.preventDefault();
+                    document.getElementById(anchorId).scrollIntoView({ behavior: 'smooth' });
+                    // 更新 active 状态
+                    document.querySelectorAll('#toc-list a').forEach(link => link.classList.remove('active'));
+                    a.classList.add('active');
+                };
+
+                li.appendChild(a);
+                tocList.appendChild(li);
+            });
+        }
+
+        // 处理本地 JSON 解析
+        function handleParseLocal() {
+            const raw = document.getElementById('raw-json').value;
+            try {
+                if (!raw.trim()) throw new Error("JSON 内容为空");
+                const json = JSON.parse(raw);
+                const data = json.data || [];
+                if (!Array.isArray(data) || data.length === 0) {
+                    throw new Error("JSON 格式不正确: data 字段为空或不是数组");
+                }
+                const md = generateMarkdown(data);
+                renderResult(md);
+                // 清除错误
+                errorMsgDiv.style.display = 'none';
+            } catch (e) {
+                showError("解析失败: " + e.message);
+            }
+        }
+
+        // 处理网络请求
+        async function handleFetch() {
+            const draftId = document.getElementById('draft-id').value.trim();
+            const reqId = document.getElementById('req-id').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const env = document.getElementById('env-select').value;
+
+            if (!apiKey) {
+                showError("API Key 不能为空");
+                return;
+            }
+
+            if (!draftId && !reqId) {
+                showError("draftId 和 reqId 不能同时为空");
+                return;
+            }
+
+            if (draftId && reqId) {
+                showError("draftId 和 reqId 只能填写一个");
+                return;
+            }
+
+            const baseUrl = `https://gateway.${env}.boolv.tech/api/boolvideo/video/render/workflow/log`;
+            const params = new URLSearchParams({
+                apiKey: apiKey,
+                draftId: draftId,
+                reqId: reqId
+            });
+
+            const url = `${baseUrl}?${params.toString()}`;
+
+            // UI Loading
+            const btn = document.querySelector('button');
+            const originalText = btn.textContent;
+            btn.textContent = "请求中...";
+            btn.classList.add('loading');
+            errorMsgDiv.style.display = 'none';
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        "Accept": "application/json, text/plain, */*"
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP Error: ${response.status}`);
+                }
+
+                const text = await response.text();
+                // 尝试解析 JSON
+                let json;
+                try {
+                    json = JSON.parse(text);
+                } catch (e) {
+                    throw new Error("响应不是合法的 JSON 格式");
+                }
+
+                const data = json.data || [];
+                if (!Array.isArray(data) || data.length === 0) {
+                    throw new Error("返回数据为空或格式不正确 (data 字段不是数组)");
+                }
+
+                const md = generateMarkdown(data);
+                renderResult(md);
+
+            } catch (e) {
+                console.error(e);
+                let msg = `请求失败: ${e.message}`;
+                if (e.message.includes("Failed to fetch")) {
+                    msg += " (可能是跨域 CORS 限制，请尝试复制 JSON 内容并在下方输入框解析)";
+                    // 自动展开 JSON 输入框
+                    jsonInputArea.style.display = 'block';
+                }
+                showError(msg);
+            } finally {
+                btn.textContent = originalText;
+                btn.classList.remove('loading');
+            }
+        }
+    </script>
+
+</body>
+
+</html>
