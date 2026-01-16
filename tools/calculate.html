@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>简易四则运算练习</title>
+    <style>
+        :root {
+            --primary-color: #007AFF;
+            --success-color: #34C759;
+            --error-color: #FF3B30;
+            --bg-color: #F2F2F7;
+            /* 响应式基础字体大小：根据屏幕宽度自适应，最小24px */
+            --base-font-size: clamp(24px, 8vw, 48px);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: #1C1C1E;
+            line-height: 1.4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1 { font-size: 1.2rem; text-align: center; margin-bottom: 20px; color: #666; }
+
+        /* 通用卡片样式 */
+        .card {
+            background: white;
+            padding: 30px 20px;
+            border-radius: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* 字体自适应控制 */
+        .big-text { font-size: var(--base-font-size); font-weight: bold; text-align: center; }
+        .huge-text { font-size: calc(var(--base-font-size) * 1.5); font-weight: 800; text-align: center; color: var(--primary-color); }
+
+        /* 配置页样式 */
+        .config-item { display: flex; flex-direction: column; gap: 10px; }
+        .checkbox-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .checkbox-item {
+            background: #eee; padding: 15px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            cursor: pointer; font-size: 1rem;
+        }
+        .checkbox-item input { width: 25px; height: 25px; }
+        .checkbox-item.active { background: var(--primary-color); color: white; }
+
+        /* 输入框与按钮 */
+        input[type="number"] {
+            width: 100%; padding: 15px; border: 3px solid #DDD;
+            border-radius: 12px; font-size: var(--base-font-size);
+            text-align: center; outline: none; transition: border-color 0.3s;
+        }
+        input[type="number"]:focus { border-color: var(--primary-color); }
+
+        button {
+            width: 100%; padding: 20px; border: none; border-radius: 16px;
+            font-size: 1.2rem; font-weight: bold; cursor: pointer;
+            background: var(--primary-color); color: white;
+            transition: opacity 0.2s;
+        }
+        button:active { opacity: 0.8; }
+
+        /* 进度条 */
+        .progress-container { width: 100%; height: 20px; background: #E5E5EA; border-radius: 10px; overflow: hidden; margin-bottom: 30px; }
+        #progress-bar { width: 0%; height: 100%; background: var(--success-color); transition: width 0.3s; }
+
+        /* 弹窗系统 */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+            display: none; align-items: center; justify-content: center; padding: 20px; z-index: 100;
+        }
+        .modal {
+            background: white; padding: 30px; border-radius: 20px; width: 100%; max-width: 400px;
+            text-align: center; animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <!-- 首页配置 -->
+    <div id="home-view">
+        <h1 class="big-text">数学练习配置</h1>
+        <div class="card">
+            <div class="config-item">
+                <p>选择运算类型：</p>
+                <div class="checkbox-group" id="ops-group">
+                    <label class="checkbox-item active"><input type="checkbox" value="+" checked> 加法 (+)</label>
+                    <label class="checkbox-item"><input type="checkbox" value="-"> 减法 (-)</label>
+                    <label class="checkbox-item"><input type="checkbox" value="*"> 乘法 (×)</label>
+                    <label class="checkbox-item"><input type="checkbox" value="/"> 除法 (÷)</label>
+                </div>
+            </div>
+            <div class="config-item">
+                <p>题目数量：</p>
+                <input type="number" id="total-qs" value="5" min="1" max="50">
+            </div>
+            <button onclick="startQuiz()">开始答题</button>
+        </div>
+    </div>
+
+    <!-- 答题页面 -->
+    <div id="quiz-view" class="hidden">
+        <div class="progress-container">
+            <div id="progress-bar"></div>
+        </div>
+        <div class="card">
+            <div id="question-area">
+                <div id="num1" class="huge-text">0</div>
+                <div id="operator" class="big-text" style="color: #888;">+</div>
+                <div id="num2" class="huge-text">0</div>
+            </div>
+            <input type="number" id="answer-input" placeholder="请输入答案" pattern="\d*">
+            <button onclick="checkAnswer()">提交答案</button>
+        </div>
+    </div>
+</div>
+
+<!-- 弹窗 -->
+<div id="modal-overlay" class="modal-overlay">
+    <div class="modal">
+        <p id="modal-msg" class="big-text" style="margin-bottom: 20px;"></p>
+        <button id="modal-btn" onclick="closeModal()">确定</button>
+    </div>
+</div>
+
+<script>
+    // 状态管理
+    let state = {
+        view: 'home',
+        ops: ['+'],
+        total: 5,
+        currentIdx: 0,
+        errorCount: 0,
+        currentAns: 0
+    };
+
+    // 初始化：复选框点击效果
+    document.querySelectorAll('.checkbox-item').forEach(item => {
+        item.addEventListener('change', (e) => {
+            item.classList.toggle('active', e.target.checked);
+        });
+    });
+
+    function startQuiz() {
+        const selectedOps = Array.from(document.querySelectorAll('#ops-group input:checked')).map(i => i.value);
+        if (selectedOps.length === 0) {
+            alert('请至少选择一种运算');
+            return;
+        }
+        
+        state.ops = selectedOps;
+        state.total = parseInt(document.getElementById('total-qs').value) || 5;
+        state.currentIdx = 0;
+        state.errorCount = 0;
+
+        document.getElementById('home-view').classList.add('hidden');
+        document.getElementById('quiz-view').classList.remove('hidden');
+        
+        nextQuestion();
+    }
+
+    function nextQuestion() {
+        // 更新进度条
+        document.getElementById('progress-bar').style.width = (state.currentIdx / state.total * 100) + '%';
+        
+        if (state.currentIdx >= state.total) {
+            showModal('答题完成，谢谢', '返回主页', () => {
+                location.reload(); // 简单重置
+            });
+            return;
+        }
+
+        // 生成题目
+        const op = state.ops[Math.floor(Math.random() * state.ops.length)];
+        let n1, n2, ans;
+
+        if (op === '/') {
+            // 确保除法能整除且分母不为0
+            n2 = Math.floor(Math.random() * 9) + 1; // 1-10
+            ans = Math.floor(Math.random() * 9) + 1; // 1-10
+            n1 = n2 * ans; // 反向生成被除数，可能超过15但符合逻辑
+        } else if (op === '-') {
+            n1 = Math.floor(Math.random() * 9) + 1;
+            n2 = Math.floor(Math.random() * (n1 - 1)) + 1; // 确保结果非负
+            ans = n1 - n2;
+        } else {
+            n1 = Math.floor(Math.random() * 10);
+            n2 = Math.floor(Math.random() * 10);
+            ans = op === '+' ? n1 + n2 : n1 * n2;
+        }
+
+        state.currentAns = ans;
+        document.getElementById('num1').innerText = n1;
+        document.getElementById('num2').innerText = n2;
+        document.getElementById('operator').innerText = op === '*' ? '×' : (op === '/' ? '÷' : op);
+        
+        const input = document.getElementById('answer-input');
+        input.value = '';
+        input.focus();
+    }
+
+    function checkAnswer() {
+        const userAns = parseInt(document.getElementById('answer-input').value);
+        
+        if (userAns === state.currentAns) {
+            state.currentIdx++;
+            state.errorCount = 0; // 答对则重置单题错误计数
+            nextQuestion();
+        } else {
+            state.errorCount++;
+            if (state.errorCount >= 3) {
+                showModal('答题错误达到三次，请告知您的家人，并确认您的身体状况。', null);
+            } else {
+                showModal('答题错误，请检查答案', '确定');
+            }
+        }
+    }
+
+    // 弹窗逻辑
+    function showModal(msg, btnText, callback) {
+        const overlay = document.getElementById('modal-overlay');
+        const msgEl = document.getElementById('modal-msg');
+        const btn = document.getElementById('modal-btn');
+        
+        msgEl.innerText = msg;
+        overlay.style.display = 'flex';
+
+        if (btnText) {
+            btn.innerText = btnText;
+            btn.classList.remove('hidden');
+            btn.onclick = () => {
+                overlay.style.display = 'none';
+                if (callback) callback();
+                document.getElementById('answer-input').focus();
+            };
+        } else {
+            // 第三次错误，隐藏关闭按钮，无法退出
+            btn.classList.add('hidden');
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('modal-overlay').style.display = 'none';
+    }
+
+    // 监听回车提交
+    document.getElementById('answer-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') checkAnswer();
+    });
+</script>
+
+</body>
+</html>
