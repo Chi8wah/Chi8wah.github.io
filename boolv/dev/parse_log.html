@@ -483,7 +483,19 @@
         function extractSectionsFromItem(item) {
             const contextData = (item.context && item.context.data) ? item.context.data : {};
 
-            const sectionDefs = [
+            const buildEnterpriseInfoAgentSectionDefs = [
+                { title: "1. 生成模特", pattern: /^ai_modelnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "2. 素材分组", pattern: /^image_groupnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "3. 图生图 Prompt", pattern: /^image_to_image_promptnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "4. 图生图", pattern: /^image_to_image_agentnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "5. 动态化前素材分析", pattern: /^material_analysisnull$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] }, // 这里的正则和 key 可能需要在实际业务中区分，但按 Python 脚本逻辑是一样的
+                { title: "6. 挑选运镜", pattern: /^motion_effect_agentnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "7. 图片动态化(可忽略)", pattern: /^image_dynamic_agentnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "8. 图片动态化素材分析", pattern: /^image_dynamic_analysisnull$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] },
+                { title: "9. 挑选模板", pattern: /^BUILD_ENTERPRISE_INFO_AGENTnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+            ];
+
+            const videoMontageSectionDefs = [
                 { title: "0. 音乐卡点", pattern: /^music_cutting(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
                 { title: "1. 素材分析表", pattern: /^material_analysis(\d+)$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] },
                 { title: "2. 粗略脚本大纲", pattern: /^outline(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
@@ -494,7 +506,10 @@
                 { title: "7. 插入画中画", pattern: /^pip(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
                 { title: "8. 插入音效", pattern: /^sound_effect(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
                 { title: "9. 插入贴纸", pattern: /^sicker(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "10. 插入多文本", pattern: /^multi_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] }
             ];
+
+            const sectionDefs = item.type === "CHOOSE_TEMPLATE" ? buildEnterpriseInfoAgentSectionDefs : videoMontageSectionDefs;
 
             // 1. 获取所有操作前缀
             const operationPrefixes = new Set();
@@ -546,10 +561,16 @@
         // 生成 Markdown 文本
         function generateMarkdown(dataItems) {
             const mdLines = [];
+            let videoMontageCount = 1;
 
             dataItems.forEach((item, idx) => {
                 const instanceId = item.instanceId || item.instanceID || item.id || `item-${idx}`;
-                mdLines.push(`# ${instanceId}`);
+                if (item.type === "CHOOSE_TEMPLATE") {
+                    mdLines.push("# 自然语言选择模板");
+                } else {
+                    mdLines.push(`# 视频混剪草稿 - ${videoMontageCount}`);
+                    videoMontageCount += 1;
+                }
 
                 // Info
                 const workflowDefId = item.workflowDefId || "";
@@ -580,6 +601,7 @@
 
                 mdLines.push("## Information");
                 const infoObj = {
+                    instanceId,
                     workflowDefId,
                     status,
                     startTime: startTimeRaw,
