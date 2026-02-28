@@ -488,7 +488,7 @@
                 { title: "2. 素材分组", pattern: /^image_groupnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
                 { title: "3. 图生图 Prompt", pattern: /^image_to_image_promptnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
                 { title: "4. 图生图", pattern: /^image_to_image_agentnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
-                { title: "5. 动态化前素材分析", pattern: /^material_analysisnull$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] }, // 这里的正则和 key 可能需要在实际业务中区分，但按 Python 脚本逻辑是一样的
+                { title: "5. 动态化前素材分析", pattern: /^material_analysisnull$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] }, 
                 { title: "6. 挑选运镜", pattern: /^motion_effect_agentnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
                 { title: "7. 图片动态化(可忽略)", pattern: /^image_dynamic_agentnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
                 { title: "8. 图片动态化素材分析", pattern: /^image_dynamic_analysisnull$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] },
@@ -496,17 +496,17 @@
             ];
 
             const videoMontageSectionDefs = [
-                { title: "0. 音乐卡点", pattern: /^music_cutting(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
-                { title: "1. 素材分析表", pattern: /^material_analysis(\d+)$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] },
-                { title: "2. 粗略脚本大纲", pattern: /^outline(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
-                { title: "3. 结构化脚本", pattern: /^structured_script(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
-                { title: "4. 生成口播", pattern: /^voiceover_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
-                { title: "5. 生成口播语音及时长", pattern: /^voiceover_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] }, // 这里的正则和 key 可能需要在实际业务中区分，但按 Python 脚本逻辑是一样的
-                { title: "6. 视频时长匹配", pattern: /^duration_match(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
-                { title: "7. 插入画中画", pattern: /^pip(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
-                { title: "8. 插入音效", pattern: /^sound_effect(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
-                { title: "9. 插入贴纸", pattern: /^sicker(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
-                { title: "10. 插入多文本", pattern: /^multi_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] }
+                { title: "0. 音乐卡点", variables: ["EXPECT_VIDEO_DURATION", "MUSIC_CUTTING_RULES", "SELECT_BEATS_RULES", "VIDEO_STRUCTURE"], pattern: /^music_cutting(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "1. 素材分析表", variables: [], pattern: /^material_analysis(\d+)$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] },
+                { title: "2. 粗略脚本大纲", variables: ["VIDEO_TYPE", "ASPECT_RATIO", "VIDEO_DURATION", "PRODUCT_VIDEO_CATEGORIES", "PRODUCT_CORE", "USER_PAIN_POINTS", "VIDEO_STRUCTURE", "DUBBING_LANGUAGE"], pattern: /^outline(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "3. 结构化脚本", variables: ["VIDEO_SPECIFICATIONS", "MINIMUM_SHOT_UNIT_DURATION"], pattern: /^structured_script(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "4. 生成口播", variables: ["DUBBING_LANGUAGE", "DUBBING_TONE", "PRODUCT_CORE", "USER_PAIN_POINTS", "ADDITIONAL_DUBBING_INFORMATION", "ADDITIONAL_DUBBING_INFORMATION_ADMIN"], pattern: /^voiceover_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "5. 生成口播语音及时长", variables: [], pattern: /^voiceover_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] }, 
+                { title: "6. 视频时长匹配", variables: ["ADDITIONAL_STORYBOARD_ADJUSTMENT_SPEC"], pattern: /^duration_match(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "7. 插入画中画", variables: ["ADDITIONAL_INSERT_PIP_SPEC"], pattern: /^pip(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "8. 插入音效", variables: ["SOUND_EFFECTS_INSERT_RULES"], pattern: /^sound_effect(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "9. 插入贴纸", variables: ["STICKERS_INSERT_RULES"], pattern: /^sicker(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "10. 插入多文本", variables: ["MULTI_TEXT_RULES"], pattern: /^multi_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] }
             ];
 
             const sectionDefs = item.type === "CHOOSE_TEMPLATE" ? buildEnterpriseInfoAgentSectionDefs : videoMontageSectionDefs;
@@ -524,6 +524,19 @@
                 let promptValue = "";
                 let resultValue = "";
                 let errorValue = "";
+                let inputValues = []; // 保存 variables 的键值对
+
+                // 获取 Input 变量的值
+                if (Array.isArray(sec.variables)) {
+                    sec.variables.forEach(vKey => {
+                        if (contextData[vKey] !== undefined) {
+                            inputValues.push({
+                                key: vKey,
+                                value: contextData[vKey]
+                            });
+                        }
+                    });
+                }
 
                 // 寻找匹配的 prefix
                 for (const prefix of operationPrefixes) {
@@ -549,6 +562,7 @@
                 }
                 results.push({
                     title: sec.title,
+                    input: inputValues, // 挂载 Input 内容
                     prompt: promptValue,
                     result: resultValue,
                     error: errorValue
@@ -618,10 +632,26 @@
                 // Sections
                 const sections = extractSectionsFromItem(item);
                 sections.forEach(sec => {
+                    const promptText = prepareOutputText(sec.prompt);
                     mdLines.push(`## ${sec.title}`);
 
+                    // 渲染 Input (变量内容)
+                    if (promptText && sec.input && sec.input.length > 0) {
+                        mdLines.push("### Input");
+                        sec.input.forEach(inputItem => {
+                            let valStr = typeof inputItem.value === 'object' && inputItem.value !== null 
+                                ? JSON.stringify(inputItem.value) 
+                                : String(inputItem.value);
+                            
+                            // 防止多行文本破坏 Markdown 列表结构，把换行替换为 <br>
+                            valStr = valStr.replace(/\n/g, '<br>');
+                            
+                            mdLines.push(`- ***${inputItem.key}:*** ${valStr}`);
+                        });
+                        mdLines.push("");
+                    }
+
                     mdLines.push("### Prompt");
-                    const promptText = prepareOutputText(sec.prompt);
                     if (promptText) {
                         mdLines.push("```");
                         mdLines.push(promptText);
