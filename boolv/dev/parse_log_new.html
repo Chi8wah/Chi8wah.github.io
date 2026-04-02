@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BoolVideo Log Parser (Pro)</title>
+    <!-- Markdown 解析器 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 美化 JSON -->
+    <script defer src="https://unpkg.com/pretty-json-custom-element/index.js"></script>
+    <!-- 代码高亮样式 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-light.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --sidebar-bg: #ffffff;
+            --panel-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+
+            --accent-blue: #2563eb;
+            --accent-blue-light: #dbeafe;
+            --accent-blue-hover: #1d4ed8;
+            --accent-red: #ef4444;
+
+            --sidebar-width: 300px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 侧边栏目录 */
+        #sidebar {
+            width: var(--sidebar-width);
+            background: var(--sidebar-bg);
+            box-shadow: 1px 0 3px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-header h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sidebar-header h3::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--accent-blue);
+            border-radius: 50%;
+        }
+
+        .toc-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            scroll-behavior: smooth;
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.25);
+        }
+
+        #toc-list {
+            list-style: none;
+        }
+
+        #toc-list li {
+            margin-bottom: 4px;
+        }
+
+        #toc-list a {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            display: block;
+            padding: 6px 10px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            border-left: 2px solid transparent;
+            line-height: 1.4;
+        }
+
+        #toc-list a:hover {
+            background-color: rgba(0, 0, 0, 0.03);
+            color: var(--text-primary);
+        }
+
+        #toc-list a.active {
+            background-color: var(--accent-blue-light);
+            color: var(--accent-blue);
+            border-left-color: var(--accent-blue);
+            font-weight: 500;
+        }
+
+        #toc-list .h2 {
+            padding-left: 20px;
+            font-size: 0.8rem;
+        }
+
+        #toc-list .h3 {
+            padding-left: 32px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        #toc-list .h4 {
+            padding-left: 44px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* 主内容区 */
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 顶部控制栏 */
+        #controls {
+            padding: 20px 30px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 20;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: flex-end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input,
+        select,
+        textarea {
+            padding: 10px 14px;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            min-width: 160px;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 2px var(--accent-blue-light);
+        }
+
+        button {
+            padding: 10px 20px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+            filter: brightness(1.1);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        button.secondary {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+            color: var(--text-primary);
+        }
+
+        button.secondary:hover {
+            background: rgba(0, 0, 0, 0.03);
+            border-color: var(--text-secondary);
+        }
+
+        .warn-info {
+            padding: 8px 12px;
+            border-left: 3px solid var(--accent-red);
+            background: #fef2f2;
+            border-radius: 0 6px 6px 0;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+        }
+
+        /* 错误提示 */
+        #error-msg {
+            color: #dc2626;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            padding: 10px 16px;
+            border-radius: 8px;
+            display: none;
+            font-size: 0.9rem;
+            width: 100%;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .toggle-mode {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            margin-left: auto;
+            transition: color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .toggle-mode:hover {
+            color: var(--accent-blue);
+        }
+
+        /* JSON 输入模态框 */
+        #json-input-area {
+            display: none;
+            width: 100%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        textarea {
+            width: 100%;
+            height: 120px;
+            resize: vertical;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 0.85rem;
+        }
+
+        /* Markdown 内容区 */
+        #content-area {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            position: relative;
+        }
+
+        /* Markdown 样式重置与美化 (深色版) */
+        .markdown-body {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: transparent;
+            color: var(--text-primary);
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .markdown-body h1,
+        .markdown-body h2,
+        .markdown-body h3,
+        .markdown-body h4 {
+            color: var(--text-primary);
+            font-weight: 600;
+            margin-top: 2em;
+            margin-bottom: 1em;
+            scroll-margin-top: 20px;
+        }
+
+        .markdown-body h1 {
+            font-size: 2em;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.3em;
+            color: var(--accent-blue);
+        }
+
+        .markdown-body h2 {
+            font-size: 1.5em;
+            border-bottom: 1px dashed var(--border-color);
+            padding-bottom: 0.3em;
+        }
+
+        .markdown-body h3 {
+            font-size: 1.25em;
+            color: var(--text-primary);
+        }
+
+        .markdown-body p {
+            margin-bottom: 1em;
+            color: var(--text-secondary);
+        }
+
+        .markdown-body ul {
+            padding-left: 2em;
+            margin-bottom: 1em;
+            color: var(--text-secondary);
+        }
+
+        .markdown-body li {
+            margin-bottom: 0.5em;
+        }
+
+        .markdown-body pre {
+            background: #f6f8fa;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            overflow: auto;
+            margin-bottom: 1.5em;
+            box-shadow: inset 0 0 0 1px var(--border-color);
+        }
+
+        .markdown-body code {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 0.85em;
+        }
+
+        .markdown-body p code,
+        .markdown-body li code {
+            background: rgba(0, 0, 0, 0.06);
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            color: var(--accent-red);
+        }
+
+        .markdown-body hr {
+            height: 1px;
+            background-color: var(--border-color);
+            border: none;
+            margin: 3em 0;
+        }
+
+        /* pretty-json 样式覆盖 */
+        pretty-json {
+            display: block;
+            background: #f6f8fa;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 1.5em;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 0.85em;
+            overflow-x: auto;
+            --pj-color-key: #0550ae;
+            --pj-color-string: #0a3069;
+            --pj-color-number: #6639ba;
+            --pj-color-boolean: #cf222e;
+            --pj-color-null: #cf222e;
+            --pj-color-bg: transparent;
+        }
+
+        /* 加载动画 */
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+            position: relative;
+            color: transparent !important;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(0, 0, 0, 0.15);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        @keyframes spin {
+            to {
+                transform: translate(-50%, -50%) rotate(360deg);
+            }
+        }
+
+        /* 状态展示区 */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 60vh;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+            fill: currentColor;
+        }
+
+        .empty-state h2 {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        /* 摘要信息 */
+        .summary-bar {
+            background: var(--accent-blue-light);
+            border: 1px solid rgba(37, 99, 235, 0.2);
+            border-radius: 8px;
+            padding: 12px 20px;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 20px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .summary-item strong {
+            color: var(--text-primary);
+            margin-right: 6px;
+        }
+
+        /* 回到顶部按钮 */
+        #back-to-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s;
+            pointer-events: none;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #back-to-top.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        #back-to-top:hover {
+            background: rgba(0, 0, 0, 0.03);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <h3>目录</h3>
+        </div>
+        <div class="toc-container" id="toc-container">
+            <ul id="toc-list">
+                <li style="color:var(--text-muted); font-size:0.85rem; padding: 10px;">暂无内容...</li>
+            </ul>
+        </div>
+    </div>
+
+    <div id="main">
+        <div id="controls">
+            <div class="controls-row">
+                <div class="form-group">
+                    <label>环境</label>
+                    <select id="env-select">
+                        <option value="staging">Staging</option>
+                        <option value="online">Online</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Draft ID (二选一)</label>
+                    <input type="text" id="draft-id" placeholder="输入 Draft ID">
+                </div>
+                <div class="form-group">
+                    <label>Req ID (二选一)</label>
+                    <input type="text" id="req-id" placeholder="输入 Req ID">
+                </div>
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="text" id="api-key" placeholder="输入 API Key">
+                </div>
+                <button id="fetch-btn" onclick="handleFetch()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>
+                    请求并解析
+                </button>
+                <button class="secondary" onclick="handleClear()">清空</button>
+                
+                <span class="toggle-mode" onclick="toggleJsonInput()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    粘贴本地 JSON
+                </span>
+            </div>
+            
+            <div id="error-msg"></div>
+            
+            <div id="json-input-area">
+                <div class="form-group">
+                    <textarea id="raw-json" placeholder='{"code": 200, "data": [...]}'></textarea>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button class="secondary" onclick="handleParseLocal()">解析本地 JSON</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-area">
+            <div id="output" class="markdown-body">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+                        <path d="M8 14h8v2H8zM8 10h5v2H8z"/>
+                    </svg>
+                    <h2>等待解析</h2>
+                    <p>请在上方输入参数请求日志，或粘贴 JSON 进行解析。</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="back-to-top" onclick="scrollToTop()" title="回到顶部">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 状态与 DOM 引用
+        // ==========================================
+        const outputDiv = document.getElementById('output');
+        const errorMsgDiv = document.getElementById('error-msg');
+        const tocList = document.getElementById('toc-list');
+        const tocContainer = document.getElementById('toc-container');
+        const jsonInputArea = document.getElementById('json-input-area');
+        const contentArea = document.getElementById('content-area');
+        const backToTopBtn = document.getElementById('back-to-top');
+        const fetchBtn = document.getElementById('fetch-btn');
+
+        let tocObserver = null;
+        let headingElements = [];
+        let isClickScrolling = false;
+        let clickScrollTimeout = null;
+        let renderVersion = 0;
+        let _scrollEndTimer = null;
+        let _scrollEndHandler = null;
+
+        // Unified cleanup for TOC-related state, observers, and listeners
+        function cleanupTocSync() {
+            if (tocObserver) {
+                tocObserver.disconnect();
+                tocObserver = null;
+            }
+            if (clickScrollTimeout) {
+                clearTimeout(clickScrollTimeout);
+                clickScrollTimeout = null;
+            }
+            if (_scrollEndTimer) {
+                clearTimeout(_scrollEndTimer);
+                _scrollEndTimer = null;
+            }
+            if (_scrollEndHandler) {
+                contentArea.removeEventListener('scroll', _scrollEndHandler);
+                _scrollEndHandler = null;
+            }
+            isClickScrolling = false;
+            headingElements = [];
+        }
+
+        // ==========================================
+        // JSON 树形视图生成器
+        // ==========================================
+
+        function createJsonTree(data) {
+            const container = document.createElement('pretty-json');
+            container.setAttribute('expand', "5");
+            container.textContent = JSON.stringify(data);
+            return container;
+        }
+
+        function cleanJsonMarkdown(input) {
+            if (input && typeof input === 'object') return input;
+            let str = String(input || '').trim();
+            // Pattern 1: literal ``` markers
+            const pattern1 = /^`{3}(?:json|JSON)?\s*([\s\S]*?)\s*`{3}$/;
+            const m1 = str.match(pattern1);
+            if (m1) return m1[1].trim();
+            // Pattern 2: escaped \`\`\` markers (after processStringOnly)
+            const pattern2 = /^\\`\\`\\`(?:json|JSON)?\s*([\s\S]*?)\s*\\`\\`\\`$/;
+            const m2 = str.match(pattern2);
+            if (m2) return m2[1].trim();
+            // Fallback: strip head/tail manually
+            if (str.startsWith('```')) {
+                return str.replace(/^`{3}(?:json|JSON)?\s*/, '').replace(/\s*`{3}$/, '').trim();
+            }
+            if (str.startsWith('\\`\\`\\`')) {
+                return str.replace(/^\\`\\`\\`(?:json|JSON)?\s*/, '').replace(/\s*\\`\\`\\`$/, '').trim();
+            }
+            return str;
+        }
+
+        // ==========================================
+        // 核心逻辑：Python 脚本移植
+        // ==========================================
+
+        function parseTimeToDt(val) {
+            if (val === null || val === "" || val === undefined) return null;
+            if (typeof val === 'number') return val > 1e12 ? new Date(val) : new Date(val * 1000);
+            if (typeof val === 'string') {
+                const s = val.trim();
+                if (/^\d+$/.test(s)) {
+                    const n = parseInt(s, 10);
+                    return n > 1e12 ? new Date(n) : new Date(n * 1000);
+                }
+                let d = new Date(s);
+                if (isNaN(d.getTime())) d = new Date(s.replace(' ', 'T'));
+                return isNaN(d.getTime()) ? null : d;
+            }
+            return null;
+        }
+
+        function formatDuration(startDt, endDt) {
+            if (!startDt || !endDt) return "";
+            let diffMs = endDt - startDt;
+            const sign = diffMs < 0 ? "-" : "";
+            diffMs = Math.abs(diffMs);
+
+            const totalSeconds = Math.floor(diffMs / 1000);
+            const ms = diffMs % 1000;
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            const msStr = ms.toString().padStart(3, '0');
+            const minStr = minutes.toString().padStart(2, '0');
+            const secStr = seconds.toString().padStart(2, '0');
+
+            if (hours > 0) {
+                return `${sign}${hours}:${minStr}:${secStr}.${msStr}`;
+            } else {
+                return `${sign}${minutes}:${secStr}.${msStr}`;
+            }
+        }
+
+        function extractValue(value, keyPath) {
+            let temp = value;
+            for (const rk of keyPath) {
+                if (temp && typeof temp === 'object' && !Array.isArray(temp)) {
+                    temp = temp[rk] !== undefined ? temp[rk] : {};
+                } else if (Array.isArray(temp)) {
+                    const collected = [];
+                    for (const item of temp) {
+                        if (item && typeof item === 'object') {
+                            collected.push(item[rk] !== undefined ? item[rk] : "");
+                        } else {
+                            collected.push(item);
+                        }
+                    }
+                    temp = collected;
+                } else {
+                    return "";
+                }
+            }
+            if (typeof temp === 'object' && Object.keys(temp).length === 0) return "";
+            return temp;
+        }
+
+        function processStringOnly(s) {
+            if (typeof s !== 'string') return s;
+            return s.replace(/\\"/g, '"')
+                .replace(/\\n/g, '\n')
+                .replace(/```/g, '\\`\\`\\`');
+        }
+
+        function prepareOutputText(value) {
+            if (value === "" || value === null || value === undefined) return "";
+            if (typeof value === 'string') return processStringOnly(value);
+            if (Array.isArray(value)) {
+                if (value.every(i => typeof i === 'string')) return value.map(processStringOnly).join("\n\n");
+                let text = JSON.stringify(value, null, 2);
+                return text.replace(/```/g, '\\`\\`\\`');
+            }
+            if (typeof value === 'object') {
+                let text = JSON.stringify(value, null, 2);
+                return text.replace(/```/g, '\\`\\`\\`');
+            }
+            return String(value);
+        }
+
+        function extractSectionsFromItem(item) {
+            const contextData = (item.context && item.context.data) ? item.context.data : {};
+
+            const buildEnterpriseInfoAgentSectionDefs = [
+                { title: "1. 生成模特", pattern: /^ai_modelnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "2. 素材分组", pattern: /^image_groupnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "3. 图生图 Prompt", pattern: /^image_to_image_promptnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "4. 图生图", pattern: /^image_to_image_agentnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "5. 动态化前素材分析", pattern: /^material_analysisnull$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] },
+                { title: "6. 挑选运镜", pattern: /^motion_effect_agentnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "7. 图片动态化(可忽略)", pattern: /^image_dynamic_agentnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "8. 图片动态化素材分析", pattern: /^image_dynamic_analysisnull$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] },
+                { title: "9. 挑选模板", pattern: /^BUILD_ENTERPRISE_INFO_AGENTnull$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+            ];
+
+            const videoMontageSectionDefs = [
+                { title: "0. 音乐卡点", variables: ["EXPECT_VIDEO_DURATION", "MUSIC_CUTTING_RULES", "SELECT_BEATS_RULES", "VIDEO_STRUCTURE"], pattern: /^music_cutting(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "1. 素材分析表", variables: [], pattern: /^material_analysis(\d+)$/, promptPath: ["prompt"], resultPath: ["templateMaterialAnalyses"] },
+                { title: "2. 粗略脚本大纲", variables: ["VIDEO_TYPE", "ASPECT_RATIO", "VIDEO_DURATION", "PRODUCT_VIDEO_CATEGORIES", "PRODUCT_CORE", "USER_PAIN_POINTS", "VIDEO_STRUCTURE", "DUBBING_LANGUAGE"], pattern: /^outline(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "3. 结构化脚本", variables: ["VIDEO_SPECIFICATIONS", "MINIMUM_SHOT_UNIT_DURATION"], pattern: /^structured_script(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "4. 生成口播", variables: ["DUBBING_LANGUAGE", "DUBBING_TONE", "PRODUCT_CORE", "USER_PAIN_POINTS", "ADDITIONAL_DUBBING_INFORMATION", "ADDITIONAL_DUBBING_INFORMATION_ADMIN"], pattern: /^voiceover_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "5. 生成口播语音及时长", variables: [], pattern: /^voiceover_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "6. 视频时长匹配", variables: ["ADDITIONAL_STORYBOARD_ADJUSTMENT_SPEC"], pattern: /^duration_match(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "7. 插入画中画", variables: ["ADDITIONAL_INSERT_PIP_SPEC"], pattern: /^pip(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "8. 插入音效", variables: ["SOUND_EFFECTS_INSERT_RULES"], pattern: /^sound_effect(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "9. 插入贴纸", variables: ["STICKERS_INSERT_RULES"], pattern: /^sicker(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] },
+                { title: "10. 插入多文本", variables: ["MULTI_TEXT_RULES"], pattern: /^multi_text(\d+)$/, promptPath: ["prompt"], resultPath: ["llmMessages", "content"] }
+            ];
+
+            const sectionDefs = item.type === "CHOOSE_TEMPLATE" ? buildEnterpriseInfoAgentSectionDefs : videoMontageSectionDefs;
+            const operationPrefixes = new Set();
+            Object.keys(contextData).forEach(key => {
+                let prefix = key.replace("_result", "").replace("_error", "");
+                operationPrefixes.add(prefix);
+            });
+
+            const results = [];
+
+            sectionDefs.forEach(sec => {
+                let promptValue = "";
+                let resultValue = "";
+                let errorValue = "";
+                let inputValues = [];
+
+                if (Array.isArray(sec.variables)) {
+                    sec.variables.forEach(vKey => {
+                        inputValues.push({ key: vKey, value: contextData[vKey] ?? "" });
+                    });
+                }
+
+                for (const prefix of operationPrefixes) {
+                    if (sec.pattern.test(prefix)) {
+                        const resultKey = `${prefix}_result`;
+                        const errorKey = `${prefix}_error`;
+
+                        if (contextData[resultKey]) {
+                            const resultObj = contextData[resultKey];
+                            promptValue = extractValue(resultObj, sec.promptPath);
+                            resultValue = extractValue(resultObj, sec.resultPath);
+                        }
+
+                        if (contextData[errorKey]) {
+                            errorValue = contextData[errorKey];
+                        }
+                        break;
+                    }
+                }
+                results.push({
+                    title: sec.title,
+                    input: inputValues,
+                    prompt: promptValue,
+                    result: resultValue,
+                    error: errorValue
+                });
+            });
+
+            return results;
+        }
+
+        function generateMarkdown(dataItems) {
+            const mdLines = [];
+            let videoMontageCount = 1;
+
+            dataItems.forEach((item, idx) => {
+                const instanceId = item.instanceId || item.instanceID || item.id || `item-${idx}`;
+                if (item.type === "CHOOSE_TEMPLATE") {
+                    mdLines.push("# 自然语言选择模板");
+                } else {
+                    mdLines.push(`# 视频混剪草稿 - ${videoMontageCount}`);
+                    videoMontageCount += 1;
+                }
+
+                const workflowDefId = item.workflowDefId || "";
+                const status = item.status || "";
+                const startTimeRaw = item.startTime || "";
+                const endTimeRaw = item.endTime || "";
+
+                let template = extractValue(item, ["context", "data", "commonDTO", "template"]);
+                let templateName = "";
+                if (typeof template === 'object') {
+                    templateName = template.name || "";
+                } else if (typeof template === 'string') {
+                    try {
+                        const parsed = JSON.parse(template);
+                        templateName = parsed.name || "";
+                    } catch (e) { }
+                }
+                const templateId = extractValue(item, ["context", "data", "commonDTO", "templateId"]);
+
+                const startDt = parseTimeToDt(startTimeRaw);
+                const endDt = parseTimeToDt(endTimeRaw);
+                let genTimeDuration = "";
+                if (startDt && endDt) {
+                    genTimeDuration = formatDuration(startDt, endDt);
+                }
+
+                mdLines.push("## Information");
+                const infoObj = {
+                    instanceId,
+                    workflowDefId,
+                    status,
+                    startTime: startTimeRaw,
+                    endTime: endTimeRaw,
+                    genTimeDuration,
+                    templateName,
+                    templateID: templateId
+                };
+                mdLines.push("```json");
+                mdLines.push(JSON.stringify(infoObj, null, 2));
+                mdLines.push("```");
+                mdLines.push("");
+
+                const sections = extractSectionsFromItem(item);
+                sections.forEach(sec => {
+                    const promptText = prepareOutputText(sec.prompt);
+                    mdLines.push(`## ${sec.title}`);
+
+                    if (promptText && sec.input && sec.input.length > 0) {
+                        mdLines.push("### Input");
+                        sec.input.forEach(inputItem => {
+                            let valStr = typeof inputItem.value === 'object' && inputItem.value !== null
+                                ? JSON.stringify(inputItem.value)
+                                : String(inputItem.value);
+                            valStr = valStr.replace(/\n/g, '<br>');
+                            mdLines.push(`- ***${inputItem.key}:*** ${valStr}`);
+                        });
+                        mdLines.push("");
+                    }
+
+                    mdLines.push("### Prompt");
+                    if (promptText) {
+                        mdLines.push("```");
+                        mdLines.push(promptText);
+                        mdLines.push("```");
+                    } else {
+                        mdLines.push("");
+                    }
+
+                    mdLines.push("### Result");
+                    const resultText = prepareOutputText(sec.result);
+                    if (resultText) {
+                        mdLines.push("```json");
+                        mdLines.push(resultText);
+                        mdLines.push("```");
+                    } else {
+                        mdLines.push("");
+                    }
+
+                    const errorText = prepareOutputText(sec.error);
+                    if (errorText) {
+                        mdLines.push("### Error");
+                        mdLines.push("```");
+                        mdLines.push(errorText);
+                        mdLines.push("```");
+                    }
+                    mdLines.push("");
+                });
+
+                mdLines.push("---");
+                mdLines.push("");
+            });
+
+            return mdLines.join("\n");
+        }
+
+        // ==========================================
+        // 页面交互与渲染逻辑
+        // ==========================================
+
+        function showError(msg) {
+            errorMsgDiv.textContent = `错误: ${msg}`;
+            errorMsgDiv.style.display = 'block';
+            setTimeout(() => errorMsgDiv.style.display = 'none', 8000);
+        }
+
+        function toggleJsonInput() {
+            jsonInputArea.style.display = jsonInputArea.style.display === 'none' || jsonInputArea.style.display === '' ? 'block' : 'none';
+        }
+
+        function handleClear() {
+            document.getElementById('draft-id').value = '';
+            document.getElementById('req-id').value = '';
+            document.getElementById('raw-json').value = '';
+            errorMsgDiv.style.display = 'none';
+            
+            // Reset output
+            outputDiv.innerHTML = `
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+                        <path d="M8 14h8v2H8zM8 10h5v2H8z"/>
+                    </svg>
+                    <h2>等待解析</h2>
+                    <p>请在上方输入参数请求日志，或粘贴 JSON 进行解析。</p>
+                </div>
+            `;
+            
+            // Reset TOC
+            tocList.innerHTML = '<li style="color:var(--text-muted); font-size:0.85rem; padding: 10px;">暂无内容...</li>';
+            
+            // Cleanup all TOC state
+            cleanupTocSync();
+            
+            // Hide back-to-top
+            backToTopBtn.classList.remove('visible');
+        }
+
+        function renderResult(mdContent, dataLength, timeTaken) {
+            // Fix D: Reset scroll position before new render
+            contentArea.scrollTop = 0;
+            backToTopBtn.classList.remove('visible');
+            
+            // Fix B: Increment render version to cancel stale batches
+            renderVersion++;
+            const thisRender = renderVersion;
+            
+            // 1. 渲染 HTML
+            const htmlContent = marked.parse(mdContent);
+            
+            // 添加摘要信息
+            const summaryHtml = `
+                <div class="summary-bar">
+                    <div class="summary-item"><strong>解析条数:</strong> ${dataLength}</div>
+                    <div class="summary-item"><strong>耗时:</strong> ${timeTaken}ms</div>
+                </div>
+            `;
+            
+            outputDiv.innerHTML = summaryHtml + htmlContent;
+
+            // 2. 增强处理：寻找 JSON 代码块并替换为交互式树 (分帧处理防卡顿)
+            const codeBlocks = Array.from(outputDiv.querySelectorAll('pre code'));
+            
+            // 使用 requestAnimationFrame 分批处理代码块
+            let i = 0;
+            function processNextBatch() {
+                // Fix B: Cancel stale batches
+                if (thisRender !== renderVersion) return;
+                
+                const batchSize = 5; // 每次处理 5 个块
+                const end = Math.min(i + batchSize, codeBlocks.length);
+                
+                for (; i < end; i++) {
+                    const block = codeBlocks[i];
+                    const isJsonClass = block.classList.contains('language-json');
+                    let content = cleanJsonMarkdown(block.textContent.trim());
+                    let isParsed = false;
+
+                    if (isJsonClass || content.startsWith('{') || content.startsWith('[')) {
+                        try {
+                            let jsonObj;
+                            jsonObj = JSON.parse(content);
+                            const treeView = createJsonTree(jsonObj);
+                            const preTag = block.parentElement;
+                            preTag.replaceWith(treeView);
+                            isParsed = true;
+                        } catch (e) {
+                            // 解析失败，回退到普通高亮
+                        }
+                    }
+
+                    if (!isParsed) {
+                        hljs.highlightElement(block);
+                    }
+                }
+                
+                if (i < codeBlocks.length) {
+                    requestAnimationFrame(processNextBatch);
+                } else {
+                    // 所有代码块处理完毕后，生成目录并绑定滚动监听
+                    generateTOC();
+                }
+            }
+            
+            if (codeBlocks.length > 0) {
+                requestAnimationFrame(processNextBatch);
+            } else {
+                generateTOC();
+            }
+        }
+
+        function generateTOC() {
+            // Fix A: Clean up all previous TOC state before rebuilding
+            cleanupTocSync();
+            
+            const fragment = document.createDocumentFragment();
+            const headers = outputDiv.querySelectorAll('h1, h2, h3, h4');
+            headingElements = Array.from(headers);
+            
+            if (headers.length === 0) {
+                tocList.innerHTML = '<li style="color:var(--text-muted); font-size:0.85rem; padding: 10px;">暂无内容...</li>';
+                return;
+            }
+
+            headers.forEach((header, index) => {
+                const anchorId = `heading-${index}`;
+                header.id = anchorId;
+
+                const li = document.createElement('li');
+                const a = document.createElement('a');
+                a.href = `#${anchorId}`;
+                a.textContent = header.textContent;
+                a.classList.add(header.tagName.toLowerCase());
+                a.dataset.targetId = anchorId;
+
+                a.onclick = (e) => {
+                    e.preventDefault();
+                    isClickScrolling = true;
+                    
+                    // Clear any previous scroll-end detection
+                    if (_scrollEndTimer) clearTimeout(_scrollEndTimer);
+                    if (_scrollEndHandler) {
+                        contentArea.removeEventListener('scroll', _scrollEndHandler);
+                    }
+                    
+                    // 滚动到目标
+                    document.getElementById(anchorId).scrollIntoView({ behavior: 'smooth' });
+                    
+                    // 更新 active 状态
+                    updateActiveTocItem(a);
+                    
+                    // Fix C: Detect scroll-end via debounce instead of fixed 800ms
+                    _scrollEndHandler = () => {
+                        if (_scrollEndTimer) clearTimeout(_scrollEndTimer);
+                        _scrollEndTimer = setTimeout(() => {
+                            contentArea.removeEventListener('scroll', _scrollEndHandler);
+                            _scrollEndHandler = null;
+                            isClickScrolling = false;
+                            _scrollEndTimer = null;
+                        }, 150); // 150ms idle = scroll settled
+                    };
+                    contentArea.addEventListener('scroll', _scrollEndHandler, { passive: true });
+                    // Fallback: if no scroll event fires (already at target), release after a short delay
+                    _scrollEndTimer = setTimeout(() => {
+                        if (_scrollEndHandler) {
+                            contentArea.removeEventListener('scroll', _scrollEndHandler);
+                            _scrollEndHandler = null;
+                        }
+                        isClickScrolling = false;
+                        _scrollEndTimer = null;
+                    }, 150);
+                };
+
+                li.appendChild(a);
+                fragment.appendChild(li);
+            });
+            
+            tocList.innerHTML = "";
+            tocList.appendChild(fragment);
+            
+            // 初始化 IntersectionObserver
+            setupTocObserver();
+        }
+        
+        function updateActiveTocItem(activeLink) {
+            if (!activeLink) return;
+            
+            document.querySelectorAll('#toc-list a').forEach(link => link.classList.remove('active'));
+            activeLink.classList.add('active');
+            
+            // 确保 active 项在目录面板中可见
+            const linkRect = activeLink.getBoundingClientRect();
+            const containerRect = tocContainer.getBoundingClientRect();
+            
+            if (linkRect.top < containerRect.top || linkRect.bottom > containerRect.bottom) {
+                activeLink.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+        
+        function setupTocObserver() {
+            if (headingElements.length === 0) return;
+
+            tocObserver = new IntersectionObserver((entries) => {
+                if (isClickScrolling) return;
+
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const activeLink = document.querySelector('#toc-list a[data-target-id="' + entry.target.id + '"]');
+                        updateActiveTocItem(activeLink);
+                    }
+                });
+            }, {
+                root: contentArea,
+                rootMargin: '0px 0px -50% 0px',
+                threshold: 0
+            });
+
+            headingElements.forEach(heading => {
+                tocObserver.observe(heading);
+            });
+
+            const firstLink = document.querySelector('#toc-list a[data-target-id="' + headingElements[0].id + '"]');
+            updateActiveTocItem(firstLink);
+        }
+
+        // 回到顶部逻辑
+        contentArea.addEventListener('scroll', () => {
+            if (contentArea.scrollTop > 300) {
+                backToTopBtn.classList.add('visible');
+            } else {
+                backToTopBtn.classList.remove('visible');
+            }
+        }, { passive: true });
+
+        function scrollToTop() {
+            contentArea.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function handleParseLocal() {
+            const raw = document.getElementById('raw-json').value;
+            try {
+                if (!raw.trim()) throw new Error("JSON 内容为空");
+                const startTime = performance.now();
+                
+                const json = JSON.parse(raw);
+                const data = json.data || [];
+                if (!Array.isArray(data) || data.length === 0) {
+                    throw new Error("JSON 格式不正确: data 字段为空或不是数组");
+                }
+                
+                const md = generateMarkdown(data);
+                const timeTaken = Math.round(performance.now() - startTime);
+                
+                renderResult(md, data.length, timeTaken);
+                errorMsgDiv.style.display = 'none';
+            } catch (e) {
+                showError("解析失败: " + e.message);
+            }
+        }
+
+        async function handleFetch() {
+            const draftId = document.getElementById('draft-id').value.trim();
+            const reqId = document.getElementById('req-id').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const env = document.getElementById('env-select').value;
+
+            if (!apiKey) {
+                showError("API Key 不能为空");
+                return;
+            }
+
+            if (!draftId && !reqId) {
+                showError("draftId 和 reqId 不能同时为空");
+                return;
+            }
+
+            if (draftId && reqId) {
+                showError("draftId 和 reqId 只能填写一个");
+                return;
+            }
+
+            const baseUrl = `https://gateway.${env}.boolv.tech/api/boolvideo/video/render/workflow/log`;
+            const params = new URLSearchParams({
+                apiKey: apiKey,
+                draftId: draftId,
+                reqId: reqId
+            });
+
+            const url = `${baseUrl}?${params.toString()}`;
+
+            // UI Loading
+            fetchBtn.classList.add('loading');
+            errorMsgDiv.style.display = 'none';
+            
+            const startTime = performance.now();
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        "Accept": "application/json, text/plain, */*"
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP Error: ${response.status}`);
+                }
+
+                const text = await response.text();
+                let json;
+                try {
+                    json = JSON.parse(text);
+                } catch (e) {
+                    throw new Error("响应不是合法的 JSON 格式");
+                }
+
+                const data = json.data || [];
+                if (!Array.isArray(data) || data.length === 0) {
+                    throw new Error("返回数据为空或格式不正确 (data 字段不是数组)");
+                }
+
+                const md = generateMarkdown(data);
+                const timeTaken = Math.round(performance.now() - startTime);
+                
+                renderResult(md, data.length, timeTaken);
+
+            } catch (e) {
+                console.error(e);
+                let msg = `请求失败: ${e.message}`;
+                if (e.message.includes("Failed to fetch")) {
+                    msg += " (可能是跨域 CORS 限制，请尝试复制 JSON 内容并在下方输入框解析)";
+                    jsonInputArea.style.display = 'block';
+                }
+                showError(msg);
+            } finally {
+                fetchBtn.classList.remove('loading');
+            }
+        }
+    </script>
+
+</body>
+
+</html>

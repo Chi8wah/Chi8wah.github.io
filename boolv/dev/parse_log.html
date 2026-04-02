@@ -45,6 +45,25 @@
         #sidebar h3 {
             margin-top: 0;
             font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        #sidebar h3 a {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--primary-color);
+            text-decoration: none;
+            padding: 3px 10px;
+            border: 1px solid var(--primary-color);
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        #sidebar h3 a:hover {
+            background: var(--primary-color);
+            color: white;
         }
 
         #toc-list {
@@ -240,7 +259,7 @@
 <body>
 
     <div id="sidebar">
-        <h3>目录</h3>
+        <h3>目录 <a href="parse_log_new.html">体验新版</a></h3>
         <ul id="toc-list">
             <!-- 动态生成 -->
             <li style="color:#999; font-size:0.9rem">暂无内容...</li>
