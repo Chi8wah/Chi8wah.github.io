@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT-Images-2 关键帧组提示词优化器</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --surface-color: #1e293b;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --error-color: #ef4444;
+            --success-color: #10b981;
+            --radius: 8px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: var(--spacing-xl) var(--spacing-md);
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-left {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.025em;
+        }
+
+        .back-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.875rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: color 0.2s ease;
+        }
+
+        .back-link:hover {
+            color: var(--primary-color);
+        }
+
+        button {
+            font-family: inherit;
+            cursor: pointer;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-sm);
+        }
+
+        button:focus-visible {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-muted);
+            padding: var(--spacing-sm) var(--spacing-md);
+        }
+
+        .btn-ghost:hover {
+            background: var(--surface-color);
+            color: var(--text-main);
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+            padding: 12px var(--spacing-lg);
+            font-size: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .row-group {
+            display: flex;
+            gap: var(--spacing-md);
+            flex-wrap: wrap;
+        }
+
+        .row-group .input-group {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        label, .field-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        textarea, input[type="text"], input[type="password"], input[type="number"], select {
+            width: 100%;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            border-radius: var(--radius);
+            padding: var(--spacing-md);
+            font-family: inherit;
+            font-size: 1rem;
+            transition: border-color 0.2s ease;
+        }
+
+        textarea {
+            resize: vertical;
+        }
+
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+            padding-right: 40px;
+        }
+
+        textarea:focus, input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 1px var(--primary-color);
+        }
+
+        textarea::placeholder {
+            color: var(--text-muted);
+            opacity: 0.5;
+        }
+
+        .prompt-input {
+            min-height: 120px;
+        }
+
+        .notes-input {
+            min-height: 80px;
+        }
+
+        .result-output {
+            min-height: 300px;
+            background: #0b1120;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: var(--spacing-md);
+            overflow-y: auto;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            width: 100%;
+        }
+
+        .result-empty {
+            color: var(--text-muted);
+            text-align: center;
+            margin: auto;
+            font-style: italic;
+        }
+
+        .result-section {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: var(--spacing-md);
+        }
+
+        .result-section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-sm);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        .result-section-content {
+            white-space: pre-wrap;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.875rem;
+            color: var(--text-main);
+            line-height: 1.6;
+        }
+
+        .result-container {
+            position: relative;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: var(--spacing-sm);
+            right: var(--spacing-sm);
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 6px 10px;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            opacity: 0;
+            transition: opacity 0.2s ease, background 0.2s ease;
+        }
+
+        .result-container:hover .copy-btn,
+        .result-container:focus-within .copy-btn,
+        .copy-btn:focus-visible {
+            opacity: 1;
+        }
+
+        .copy-btn:hover {
+            background: var(--border-color);
+            color: var(--text-main);
+        }
+
+        .copy-btn.copied {
+            color: var(--success-color);
+            border-color: var(--success-color);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: var(--spacing-xl);
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transform: translateY(10px);
+            transition: transform 0.2s ease;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .modal-desc {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-lg);
+        }
+
+        .error-message {
+            color: var(--error-color);
+            font-size: 0.875rem;
+            margin-top: var(--spacing-sm);
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        /* Icons */
+        .icon {
+            width: 1.25em;
+            height: 1.25em;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        /* Spinner */
+        .spinner {
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .loading .spinner {
+            display: block;
+        }
+
+        .loading .wand-icon {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="header-left">
+            <h1>GPT-Images-2 关键帧组提示词优化器</h1>
+            <a href="./gpt-images-2-prompt-optimizer.html" class="back-link">
+                <svg class="icon" style="width: 1em; height: 1em;" viewBox="0 0 24 24">
+                    <title>返回</title>
+                    <path d="m15 18-6-6 6-6"></path>
+                </svg>
+                返回普通提示词优化器
+            </a>
+        </div>
+        <button id="settingsBtn" class="btn-ghost" type="button" aria-label="设置 API Key">
+            <svg class="icon" viewBox="0 0 24 24">
+                <title>设置</title>
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            API Key
+        </button>
+    </header>
+
+    <main style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+        <div class="input-group">
+            <label for="coreStory">核心故事 (必填)</label>
+            <textarea id="coreStory" class="prompt-input" style="min-height: 80px;" placeholder="例如：一个家庭在公园开心地游玩，他们遇到一个乞丐并施舍了 5 块钱" aria-describedby="coreStoryError" aria-invalid="false"></textarea>
+            <div id="coreStoryError" class="error-message" aria-live="assertive">请输入核心故事</div>
+        </div>
+
+        <div class="row-group">
+            <div class="input-group">
+                <label for="subjectChars">主体/角色 (可选)</label>
+                <textarea id="subjectChars" class="notes-input" placeholder="例如：一家三口（父母和5岁小女孩），穿着休闲装；一个衣衫褴褛的老年乞丐"></textarea>
+            </div>
+            <div class="input-group">
+                <label for="sceneEnv">场景/环境 (可选)</label>
+                <textarea id="sceneEnv" class="notes-input" placeholder="例如：阳光明媚的城市公园，绿树成荫，有长椅和鸽子"></textarea>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label for="visualStyle">视觉风格 (可选)</label>
+            <input type="text" id="visualStyle" placeholder="例如：宫崎骏动画风格，温暖的色调，柔和的光线">
+        </div>
+
+        <div class="input-group">
+            <label for="openingFrame">起始帧 (Frame 1) (必填)</label>
+            <textarea id="openingFrame" class="notes-input" placeholder="描述事件发生前的初始状态。例如：一家人在草地上野餐，小女孩在追逐蝴蝶，气氛欢乐" aria-describedby="openingFrameError" aria-invalid="false"></textarea>
+            <div id="openingFrameError" class="error-message" aria-live="assertive">请输入起始帧描述</div>
+        </div>
+
+        <div class="input-group">
+            <label for="middleFrame">中间发展/高潮 (Middle Frames) (必填)</label>
+            <textarea id="middleFrame" class="notes-input" placeholder="描述事件的发展或冲突。例如：小女孩注意到路边的乞丐，走过去递给他一张5元纸币" aria-describedby="middleFrameError" aria-invalid="false"></textarea>
+            <div id="middleFrameError" class="error-message" aria-live="assertive">请输入中间发展/高潮描述</div>
+        </div>
+
+        <div class="input-group">
+            <label for="finalFrame">最终解决帧 (Frame N) (必填)</label>
+            <textarea id="finalFrame" class="notes-input" placeholder="描述事件结束后的最终状态。例如：乞丐感动地看着一家人远去的背影，手里紧紧攥着那5块钱" aria-describedby="finalFrameError" aria-invalid="false"></textarea>
+            <div id="finalFrameError" class="error-message" aria-live="assertive">请输入最终解决帧描述</div>
+        </div>
+
+        <div class="row-group">
+            <div class="input-group">
+                <label for="referenceCount">主参考图总数 (Master Reference Pack，包含主图)</label>
+                <select id="referenceCount">
+                    <option value="1">1 张</option>
+                    <option value="2">2 张</option>
+                    <option value="3">3 张</option>
+                    <option value="4" selected>4 张</option>
+                    <option value="5">5 张</option>
+                    <option value="6">6 张</option>
+                    <option value="7">7 张</option>
+                    <option value="8">8 张</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="keyframeCount">关键帧数量 (Keyframes)</label>
+                <select id="keyframeCount">
+                    <option value="2">2 帧</option>
+                    <option value="3" selected>3 帧</option>
+                    <option value="4">4 帧</option>
+                    <option value="5">5 帧</option>
+                    <option value="6">6 帧</option>
+                    <option value="7">7 帧</option>
+                    <option value="8">8 帧</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label for="continuityNotes">连续性约束 / 备注 (可选)</label>
+            <textarea id="continuityNotes" class="notes-input" placeholder="例如：主角必须始终穿着红色皮夹克，面具发蓝光。整体色调偏冷。"></textarea>
+        </div>
+
+        <div style="display: flex; justify-content: center;">
+            <button id="optimizeBtn" class="btn-primary" type="button">
+                <svg class="icon wand-icon" viewBox="0 0 24 24">
+                    <title>生成</title>
+                    <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"></path>
+                    <path d="m14 7 3 3"></path>
+                    <path d="M5 6v4"></path>
+                    <path d="M19 14v4"></path>
+                    <path d="M10 2v2"></path>
+                    <path d="M7 8H3"></path>
+                    <path d="M21 16h-4"></path>
+                    <path d="M11 3H9"></path>
+                </svg>
+                <svg class="icon spinner" viewBox="0 0 24 24">
+                    <title>生成中</title>
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                </svg>
+                <span id="btnText">生成关键帧组提示词</span>
+            </button>
+        </div>
+
+        <div class="input-group">
+            <div id="resultOutputLabel" class="field-label">生成的提示词组</div>
+            <div class="result-container">
+                <div id="resultOutput" class="result-output" role="region" aria-live="polite" aria-labelledby="resultOutputLabel">
+                    <div class="result-empty">生成后会按模块展示结果...</div>
+                </div>
+                <button id="copyBtn" class="copy-btn" type="button" aria-label="复制结果">
+                    <svg class="icon" style="width: 1em; height: 1em; margin-right: 4px;" viewBox="0 0 24 24">
+                        <title>复制</title>
+                        <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                    </svg>
+                    复制
+                </button>
+            </div>
+            <div id="apiError" class="error-message" aria-live="assertive"></div>
+        </div>
+    </main>
+</div>
+
+<!-- API Key Modal -->
+<div id="apiModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalDesc" aria-hidden="true">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle" class="modal-title">设置 Gemini API Key</h2>
+            <p id="modalDesc" class="modal-desc">您的 API Key 保存在浏览器的 localStorage（持久化存储）中，未加密，可被同源脚本或浏览器扩展读取。您填写的故事简报、关键帧描述和备注仅在生成时发送至 Google Gemini API，不会发送到其他第三方服务器。</p>
+        </div>
+        <div class="input-group">
+            <label for="apiKeyInput">API Key</label>
+            <input type="password" id="apiKeyInput" placeholder="AIzaSy..." aria-describedby="keyError" aria-invalid="false">
+            <div id="keyError" class="error-message" aria-live="assertive">请输入有效的 API Key</div>
+        </div>
+        <div class="modal-actions">
+            <button id="clearKeyBtn" class="btn-ghost" type="button" style="color: var(--error-color); margin-right: auto; display: none;">清除</button>
+            <button id="cancelKeyBtn" class="btn-ghost" type="button">取消</button>
+            <button id="saveKeyBtn" class="btn-primary" type="button" style="padding: 8px 16px;">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // DOM Elements
+    const coreStory = document.getElementById('coreStory');
+    const subjectChars = document.getElementById('subjectChars');
+    const sceneEnv = document.getElementById('sceneEnv');
+    const visualStyle = document.getElementById('visualStyle');
+    const openingFrame = document.getElementById('openingFrame');
+    const middleFrame = document.getElementById('middleFrame');
+    const finalFrame = document.getElementById('finalFrame');
+    const referenceCount = document.getElementById('referenceCount');
+    const keyframeCount = document.getElementById('keyframeCount');
+    const continuityNotes = document.getElementById('continuityNotes');
+    const resultOutput = document.getElementById('resultOutput');
+    const optimizeBtn = document.getElementById('optimizeBtn');
+    const btnText = document.getElementById('btnText');
+    const copyBtn = document.getElementById('copyBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const apiModal = document.getElementById('apiModal');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const saveKeyBtn = document.getElementById('saveKeyBtn');
+    const cancelKeyBtn = document.getElementById('cancelKeyBtn');
+    const clearKeyBtn = document.getElementById('clearKeyBtn');
+    const coreStoryError = document.getElementById('coreStoryError');
+    const openingFrameError = document.getElementById('openingFrameError');
+    const middleFrameError = document.getElementById('middleFrameError');
+    const finalFrameError = document.getElementById('finalFrameError');
+    const apiError = document.getElementById('apiError');
+    const keyError = document.getElementById('keyError');
+
+    // State
+    let apiKey = localStorage.getItem('gemini_api_key') || '';
+    let rawResultText = '';
+
+    // Initialize
+    function init() {
+        if (!apiKey) {
+            showModal();
+        }
+    }
+
+    // Modal Logic
+    function showModal() {
+        apiKeyInput.value = apiKey;
+        apiModal.classList.add('active');
+        apiModal.setAttribute('aria-hidden', 'false');
+        keyError.classList.remove('active');
+        apiKeyInput.setAttribute('aria-invalid', 'false');
+        if (apiKey) {
+            cancelKeyBtn.style.display = 'inline-flex';
+            clearKeyBtn.style.display = 'inline-flex';
+        } else {
+            cancelKeyBtn.style.display = 'none';
+            clearKeyBtn.style.display = 'none';
+        }
+        setTimeout(() => apiKeyInput.focus(), 50);
+    }
+
+    function hideModal() {
+        if (apiKey) {
+            apiModal.classList.remove('active');
+            apiModal.setAttribute('aria-hidden', 'true');
+            settingsBtn.focus();
+        } else {
+            keyError.textContent = '必须提供 API Key 才能使用此工具';
+            keyError.classList.add('active');
+            apiKeyInput.setAttribute('aria-invalid', 'true');
+        }
+    }
+
+    // Escape key to close modal
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && apiModal.classList.contains('active')) {
+            if (apiKey) {
+                hideModal();
+            }
+        }
+    });
+
+    settingsBtn.addEventListener('click', showModal);
+    cancelKeyBtn.addEventListener('click', hideModal);
+
+    clearKeyBtn.addEventListener('click', () => {
+        localStorage.removeItem('gemini_api_key');
+        apiKey = '';
+        apiKeyInput.value = '';
+        cancelKeyBtn.style.display = 'none';
+        clearKeyBtn.style.display = 'none';
+        keyError.textContent = 'API Key 已清除，请重新输入';
+        keyError.classList.add('active');
+        apiKeyInput.setAttribute('aria-invalid', 'true');
+        apiKeyInput.focus();
+    });
+
+    saveKeyBtn.addEventListener('click', () => {
+        const val = apiKeyInput.value.trim();
+        if (!val) {
+            keyError.textContent = 'API Key 不能为空';
+            keyError.classList.add('active');
+            apiKeyInput.setAttribute('aria-invalid', 'true');
+            return;
+        }
+        apiKey = val;
+        localStorage.setItem('gemini_api_key', apiKey);
+        apiKeyInput.setAttribute('aria-invalid', 'false');
+        hideModal();
+    });
+
+    // Copy Logic
+    copyBtn.addEventListener('click', async () => {
+        const text = rawResultText;
+        if (!text) return;
+        
+        try {
+            await navigator.clipboard.writeText(text);
+            const originalHtml = copyBtn.innerHTML;
+            copyBtn.innerHTML = `
+                <svg class="icon" style="width: 1em; height: 1em; margin-right: 4px;" viewBox="0 0 24 24">
+                    <path d="M20 6 9 17l-5-5"></path>
+                </svg>
+                已复制
+            `;
+            copyBtn.classList.add('copied');
+            
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHtml;
+                copyBtn.classList.remove('copied');
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+            const originalHtml = copyBtn.innerHTML;
+            copyBtn.innerHTML = `
+                <svg class="icon" style="width: 1em; height: 1em; margin-right: 4px;" viewBox="0 0 24 24">
+                    <path d="M18 6 6 18M6 6l12 12"></path>
+                </svg>
+                复制失败
+            `;
+            copyBtn.style.color = 'var(--error-color)';
+            copyBtn.style.borderColor = 'var(--error-color)';
+            
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHtml;
+                copyBtn.style.color = '';
+                copyBtn.style.borderColor = '';
+            }, 2000);
+        }
+    });
+
+    // Optimize Logic
+    const SYSTEM_PROMPT_TEMPLATE = `你是一个专业的 GPT Image 2 关键帧组提示词规划专家。Gemini 只负责规划和生成提示词，不负责生成图片；最终图片将由官方 OpenAI gpt-image-2 生成。
+
+你的唯一任务：根据用户提供的结构化故事简报，规划并生成一组结构化的高质量图像生成 prompt，用于生成视频关键帧所需的视觉参考包和最终关键帧。
+
+严格输出要求：
+- 必须使用中文标题和中文说明，方便中文用户理解每一步该做什么。
+- 只有真正要复制给 gpt-image-2 的 Prompt 内容必须使用英文。
+- 必须严格按照以下中文标题输出，标题文字不得改写：
+  视觉设定说明
+  参考包覆盖计划
+  主身份/主资产提示词（Image 1）
+  派生参考包提示词（Images 2..N）
+  关键帧状态计划
+  关键帧生图提示词
+- 所有英文 Prompt 必须是用于生成静态图像（still image）的 prompt，绝对不能包含视频相关的指令（如 duration, fps, camera pan, video transitions, video model API instructions 等）。
+- 所有英文 Prompt 必须清晰、具体、可直接提交给 gpt-image-2。
+
+规划原则与约束：
+- 固定的 Master Reference Pack 是主要视觉锚点；相邻关键帧只能作为辅助连续性参考，不能作为唯一真实来源。
+- Master Reference Pack 不是最终成片画面，而是视觉资料包（visual documentation pack）。它的目标是最大化可复用的事实信息：人物身份、服装、身体比例、环境布局、空间关系、固定道具、材质和尺度。
+- 参考包 Prompt 不得被最终画面的视觉风格、情绪氛围、电影感构图、关键帧动作、连续性备注中的临时要求所约束；除非这些内容描述的是永久身份、永久环境布局或固定道具。
+- 参考包图片应使用清晰、客观、无遮挡、信息密度高的资料图表达；优先使用 neutral documentary lighting、unobstructed view、uncropped subject、full layout visible 等说明，不要使用 dramatic close-up、cinematic mood、shallow depth of field 或 decorative staging。
+- 角色/人物参考：用于锚定脸、发型、体型、服装、年龄、比例和辨识特征。
+- 环境/场景参考：用于锚定空镜或近空镜、整体布局、家具/物件位置、门窗、墙面、地面、尺度和空间关系。
+- 道具/资产参考：用于锚定关键物件的形状、材质、标签、颜色、磨损和大小。
+- 如果用户填写了“场景/环境”且主参考图总数 {{REF_COUNT}} >= 2，Image 2 必须是 Environment / Location Reference：空镜或近空镜，展示完整空间布局和环境信息，不得生成为角色近照或角色在场景里的特写。
+- 如果 {{REF_COUNT}} = 2 且存在主体/角色与场景/环境，Image 1 用于主体/角色身份，Image 2 用于环境/布局参考；不要把 Image 2 用作第二张人物近照。
+- 如果 {{REF_COUNT}} > 2，Images 3..N 再按信息增益分配给角色全身/侧面/表情、关键道具、材质细节或人物关系 staging。
+- 如果没有主体/角色但有场景/环境，Image 1 应改为主环境/主资产参考图。
+- 所有关键帧 Prompt 必须明确按索引引用已批准的 Master Reference Pack images，例如 Image 1 = character identity reference, Image 2 = environment layout reference。
+- 关键帧语义约束：
+  - Frame 1 必须描绘起始状态（Opening State），即主要变化/冲突/高潮发生前的状态。
+  - Frame N 必须描绘最终解决状态（Final Resolved State），即主要事件完成后的状态。
+  - 中间的帧（Middle frames）应包含事件的发展、相遇、动作、高潮或转折点。
+  - 绝对不要将高潮/动作瞬间作为最后一帧，除非用户在“最终解决帧”中明确要求画面定格在那个瞬间。
+
+用户输入信息（结构化简报）：
+{{USER_BRIEF}}
+
+- 主参考图总数 (Master Reference Pack)：{{REF_COUNT}} 张，包含 Image 1；派生参考图数量为 {{DERIVED_COUNT}} 张，对应 Images 2..N
+- 关键帧数量 (Keyframes)：{{KEYFRAME_COUNT}} 帧
+- 连续性约束/备注：{{NOTES}}
+
+请严格按照以下格式输出（不要输出 Markdown 代码块符号，直接输出文本）：
+
+视觉设定说明
+[用中文简述整体视觉方向、最终关键帧可使用的风格、色调、材质、光影等。说明这些是最终关键帧的表现方向，不应反向限制参考包资料图。]
+
+参考包覆盖计划
+[用中文列出 {{REF_COUNT}} 张参考图的职责，让用户知道先生成哪张、每张用于什么。必须按 Image 编号输出。]
+1. Image 1 - [中文用途说明，例如：主体/角色身份参考，作为人物外貌锚点]
+2. Image 2 - [如果提供了场景/环境且 {{REF_COUNT}} >= 2，这里必须是：环境/布局参考，空镜或近空镜，用于锚定完整空间]
+...
+
+主身份/主资产提示词（Image 1）
+用途说明：[中文说明 Image 1 的作用，以及用户生成后应把它作为哪类参考图]
+Prompt: [1段英文 Prompt，用于生成 Image 1。若有主体/角色，生成最基础的主身份图，必须包含详尽身份特征；若无主体/角色但有场景/环境，则生成主环境/主资产参考图。参考图是资料图，不是最终电影画面。]
+
+派生参考包提示词（Images 2..N）
+[生成 {{DERIVED_COUNT}} 个条目。注意：用户选择的 {{REF_COUNT}} 张是完整 Master Reference Pack 总数，已经包含 Image 1；本区只生成 Images 2..N。如果 {{DERIVED_COUNT}} 为0，则直接输出“无需派生”。每个条目必须先用中文写“用途说明”，再用英文写“Prompt”。]
+2. 用途说明：[中文说明这张参考图的角色，例如：环境/布局参考、角色全身参考、关键道具参考、材质细节参考]
+   Prompt: [英文 Prompt]
+3. 用途说明：[中文说明]
+   Prompt: [英文 Prompt]
+...
+
+关键帧状态计划
+[用中文简述 {{KEYFRAME_COUNT}} 个关键帧的画面内容、动作、场景和情绪递进关系。注意：第 1 项必须是用户简报中的“起始帧”状态，第 {{KEYFRAME_COUNT}} 项必须是“最终解决帧”状态，中间项分配给“中间发展/高潮”。]
+1. [中文简述 - 起始状态]
+2. [中文简述 - 发展/高潮]
+...
+{{KEYFRAME_COUNT}}. [中文简述 - 最终解决状态]
+
+关键帧生图提示词
+[生成 {{KEYFRAME_COUNT}} 个条目。每个条目必须先用中文写“用途说明”，再用英文写“Prompt”。英文 Prompt 必须明确说明使用哪些 Master Reference Pack images 作为参考，例如 Image 1 for character identity, Image 2 for environment layout。绝对不能包含视频指令。]
+1. 用途说明：[中文说明这是起始状态，用户应在生成关键帧 1 时使用]
+   Prompt: [英文 Prompt - Opening State]
+2. 用途说明：[中文说明这是发展/高潮帧]
+   Prompt: [英文 Prompt - Progression/Climax]
+...
+{{KEYFRAME_COUNT}}. 用途说明：[中文说明这是最终解决状态]
+   Prompt: [英文 Prompt - Final Resolved State]`;
+
+    function renderResult(text) {
+        resultOutput.innerHTML = '';
+        
+        const headings = [
+            '视觉设定说明',
+            '参考包覆盖计划',
+            '主身份/主资产提示词（Image 1）',
+            '主身份/主资产提示词 (Image 1)',
+            '派生参考包提示词（Images 2..N）',
+            '派生参考包提示词 (Images 2..N)',
+            '关键帧状态计划',
+            '关键帧生图提示词',
+            'Visual Bible',
+            'Master Identity / Master Asset Prompt',
+            'Derived Master Reference Pack Prompts',
+            'Keyframe State Plan',
+            'Keyframe Prompts'
+        ];
+        const headingLabels = {
+            'Visual Bible': '视觉设定说明',
+            '主身份/主资产提示词 (Image 1)': '主身份/主资产提示词（Image 1）',
+            '派生参考包提示词 (Images 2..N)': '派生参考包提示词（Images 2..N）',
+            'Master Identity / Master Asset Prompt': '主身份/主资产提示词（Image 1）',
+            'Derived Master Reference Pack Prompts': '派生参考包提示词（Images 2..N）',
+            'Keyframe State Plan': '关键帧状态计划',
+            'Keyframe Prompts': '关键帧生图提示词'
+        };
+        
+        const escapedHeadings = headings.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const regex = new RegExp(`^(?:#*\\s*|\\*\\*\\s*)?(${escapedHeadings.join('|')})(?:\\s*\\*\\*)?\\s*$`, 'gmi');
+        
+        const parts = text.split(regex);
+        
+        if (parts.length <= 1) {
+            const section = document.createElement('div');
+            section.className = 'result-section';
+            const content = document.createElement('div');
+            content.className = 'result-section-content';
+            content.textContent = text;
+            section.appendChild(content);
+            resultOutput.appendChild(section);
+            return;
+        }
+        
+        if (parts[0].trim()) {
+            const section = document.createElement('div');
+            section.className = 'result-section';
+            const content = document.createElement('div');
+            content.className = 'result-section-content';
+            content.textContent = parts[0].trim();
+            section.appendChild(content);
+            resultOutput.appendChild(section);
+        }
+        
+        for (let i = 1; i < parts.length; i += 2) {
+            const heading = parts[i];
+            const contentText = parts[i + 1] ? parts[i + 1].trim() : '';
+            
+            const section = document.createElement('div');
+            section.className = 'result-section';
+            
+            const title = document.createElement('div');
+            title.className = 'result-section-title';
+            title.textContent = headingLabels[heading] || heading;
+            section.appendChild(title);
+            
+            const content = document.createElement('div');
+            content.className = 'result-section-content';
+            content.textContent = contentText;
+            section.appendChild(content);
+            
+            resultOutput.appendChild(section);
+        }
+    }
+
+    async function optimizePrompt() {
+        const refCount = referenceCount.value;
+        const kfCount = keyframeCount.value;
+        const notes = continuityNotes.value.trim();
+        
+        // Validation
+        let isValid = true;
+        
+        [coreStory, openingFrame, middleFrame, finalFrame].forEach(el => {
+            el.setAttribute('aria-invalid', 'false');
+        });
+        [coreStoryError, openingFrameError, middleFrameError, finalFrameError].forEach(el => {
+            el.classList.remove('active');
+        });
+        apiError.classList.remove('active');
+        
+        if (!apiKey) {
+            showModal();
+            return;
+        }
+        
+        if (!coreStory.value.trim()) {
+            coreStoryError.classList.add('active');
+            coreStory.setAttribute('aria-invalid', 'true');
+            isValid = false;
+        }
+        if (!openingFrame.value.trim()) {
+            openingFrameError.classList.add('active');
+            openingFrame.setAttribute('aria-invalid', 'true');
+            isValid = false;
+        }
+        if (!middleFrame.value.trim()) {
+            middleFrameError.classList.add('active');
+            middleFrame.setAttribute('aria-invalid', 'true');
+            isValid = false;
+        }
+        if (!finalFrame.value.trim()) {
+            finalFrameError.classList.add('active');
+            finalFrame.setAttribute('aria-invalid', 'true');
+            isValid = false;
+        }
+
+        if (!isValid) {
+            // Focus the first invalid element
+            const firstInvalid = [coreStory, openingFrame, middleFrame, finalFrame].find(el => !el.value.trim());
+            if (firstInvalid) firstInvalid.focus();
+            return;
+        }
+
+        // UI State: Loading
+        optimizeBtn.disabled = true;
+        optimizeBtn.classList.add('loading');
+        btnText.textContent = '生成中...';
+        rawResultText = '';
+        resultOutput.innerHTML = '<div class="result-empty">生成中...</div>';
+
+        const derivedCount = Math.max(0, parseInt(refCount, 10) - 1);
+
+        const userBrief = `
+- 核心故事：${coreStory.value.trim()}
+- 主体/角色：${subjectChars.value.trim() || '未提供'}
+- 场景/环境：${sceneEnv.value.trim() || '未提供'}
+- 视觉风格：${visualStyle.value.trim() || '未提供'}
+- 起始帧 (Frame 1)：${openingFrame.value.trim()}
+- 中间发展/高潮：${middleFrame.value.trim()}
+- 最终解决帧 (Frame N)：${finalFrame.value.trim()}
+`.trim();
+
+        const finalPrompt = SYSTEM_PROMPT_TEMPLATE
+            .replace('{{USER_BRIEF}}', userBrief)
+            .replace(/{{REF_COUNT}}/g, refCount)
+            .replace(/{{DERIVED_COUNT}}/g, derivedCount)
+            .replace(/{{KEYFRAME_COUNT}}/g, kfCount)
+            .replace('{{NOTES}}', notes ? notes : '无');
+
+        try {
+            const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: finalPrompt
+                        }]
+                    }]
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error?.message || `HTTP Error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.candidates?.[0]?.content?.parts) {
+                const resultText = data.candidates[0].content.parts.map(part => part.text).join('');
+                rawResultText = resultText;
+                renderResult(resultText);
+            } else {
+                throw new Error('API 返回格式异常');
+            }
+
+        } catch (error) {
+            console.error('Optimization error:', error);
+            apiError.textContent = `生成失败: ${error.message}`;
+            apiError.classList.add('active');
+            resultOutput.innerHTML = '<div class="result-empty">生成失败，请查看错误信息后重试</div>';
+            
+            if (error.message.includes('API_KEY_INVALID') || error.message.includes('403')) {
+                apiKey = '';
+                localStorage.removeItem('gemini_api_key');
+                setTimeout(showModal, 1500);
+            }
+        } finally {
+            // UI State: Reset
+            optimizeBtn.disabled = false;
+            optimizeBtn.classList.remove('loading');
+            btnText.textContent = '生成关键帧组提示词';
+        }
+    }
+
+    optimizeBtn.addEventListener('click', optimizePrompt);
+
+    // Run init
+    init();
+</script>
+</body>
+</html>
