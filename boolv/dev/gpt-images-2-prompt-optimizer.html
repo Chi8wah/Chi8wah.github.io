@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT-Images-2 提示词优化器</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --surface-color: #1e293b;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --error-color: #ef4444;
+            --success-color: #10b981;
+            --radius: 8px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: var(--spacing-xl) var(--spacing-md);
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.025em;
+        }
+
+        button {
+            font-family: inherit;
+            cursor: pointer;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-sm);
+        }
+
+        button:focus-visible {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-muted);
+            padding: var(--spacing-sm) var(--spacing-md);
+        }
+
+        .btn-ghost:hover {
+            background: var(--surface-color);
+            color: var(--text-main);
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+            padding: 12px var(--spacing-lg);
+            font-size: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        textarea, input[type="password"] {
+            width: 100%;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            border-radius: var(--radius);
+            padding: var(--spacing-md);
+            font-family: inherit;
+            font-size: 1rem;
+            resize: vertical;
+            transition: border-color 0.2s ease;
+        }
+
+        textarea:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 1px var(--primary-color);
+        }
+
+        textarea::placeholder {
+            color: var(--text-muted);
+            opacity: 0.5;
+        }
+
+        .prompt-input {
+            min-height: 120px;
+        }
+
+        .result-output {
+            min-height: 200px;
+            background: #0b1120;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .result-container {
+            position: relative;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: var(--spacing-sm);
+            right: var(--spacing-sm);
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 6px 10px;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            opacity: 0;
+            transition: opacity 0.2s ease, background 0.2s ease;
+        }
+
+        .result-container:hover .copy-btn,
+        .result-container:focus-within .copy-btn,
+        .copy-btn:focus-visible {
+            opacity: 1;
+        }
+
+        .copy-btn:hover {
+            background: var(--border-color);
+            color: var(--text-main);
+        }
+
+        .copy-btn.copied {
+            color: var(--success-color);
+            border-color: var(--success-color);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: var(--spacing-xl);
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transform: translateY(10px);
+            transition: transform 0.2s ease;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .modal-desc {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-lg);
+        }
+
+        .error-message {
+            color: var(--error-color);
+            font-size: 0.875rem;
+            margin-top: var(--spacing-sm);
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        /* Icons */
+        .icon {
+            width: 1.25em;
+            height: 1.25em;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        /* Spinner */
+        .spinner {
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .loading .spinner {
+            display: block;
+        }
+
+        .loading .wand-icon {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>GPT-Images-2 提示词优化器</h1>
+        <button id="settingsBtn" class="btn-ghost" type="button" aria-label="设置 API Key">
+            <svg class="icon" viewBox="0 0 24 24">
+                <title>设置</title>
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            API Key
+        </button>
+    </header>
+
+    <main style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+        <div class="input-group">
+            <label for="promptInput">原始想法 / 简短提示词</label>
+            <textarea id="promptInput" class="prompt-input" placeholder="例如：一只戴着墨镜的猫在赛博朋克城市的街道上喝咖啡..."></textarea>
+            <div id="inputError" class="error-message" aria-live="assertive">请输入需要优化的提示词</div>
+        </div>
+
+        <div style="display: flex; justify-content: center;">
+            <button id="optimizeBtn" class="btn-primary" type="button">
+                <svg class="icon wand-icon" viewBox="0 0 24 24">
+                    <title>优化</title>
+                    <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"></path>
+                    <path d="m14 7 3 3"></path>
+                    <path d="M5 6v4"></path>
+                    <path d="M19 14v4"></path>
+                    <path d="M10 2v2"></path>
+                    <path d="M7 8H3"></path>
+                    <path d="M21 16h-4"></path>
+                    <path d="M11 3H9"></path>
+                </svg>
+                <svg class="icon spinner" viewBox="0 0 24 24">
+                    <title>优化中</title>
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                </svg>
+                <span id="btnText">魔法优化</span>
+            </button>
+        </div>
+
+        <div class="input-group">
+            <label for="resultOutput">优化结果</label>
+            <div class="result-container">
+                <textarea id="resultOutput" class="result-output" readonly placeholder="优化后的提示词将显示在这里..."></textarea>
+                <button id="copyBtn" class="copy-btn" type="button" aria-label="复制结果">
+                    <svg class="icon" style="width: 1em; height: 1em; margin-right: 4px;" viewBox="0 0 24 24">
+                        <title>复制</title>
+                        <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                    </svg>
+                    复制
+                </button>
+            </div>
+            <div id="apiError" class="error-message" aria-live="assertive"></div>
+        </div>
+    </main>
+</div>
+
+<!-- API Key Modal -->
+<div id="apiModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalDesc">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle" class="modal-title">设置 Gemini API Key</h2>
+            <p id="modalDesc" class="modal-desc">您的 API Key 仅保存在本地浏览器中，仅在优化时发送至 Google Gemini API，不会发送到其他任何第三方服务器。</p>
+        </div>
+        <div class="input-group">
+            <label for="apiKeyInput">API Key</label>
+            <input type="password" id="apiKeyInput" placeholder="AIzaSy...">
+            <div id="keyError" class="error-message" aria-live="assertive">请输入有效的 API Key</div>
+        </div>
+        <div class="modal-actions">
+            <button id="clearKeyBtn" class="btn-ghost" type="button" style="color: var(--error-color); margin-right: auto; display: none;">清除</button>
+            <button id="cancelKeyBtn" class="btn-ghost" type="button">取消</button>
+            <button id="saveKeyBtn" class="btn-primary" type="button" style="padding: 8px 16px;">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // DOM Elements
+    const promptInput = document.getElementById('promptInput');
+    const resultOutput = document.getElementById('resultOutput');
+    const optimizeBtn = document.getElementById('optimizeBtn');
+    const btnText = document.getElementById('btnText');
+    const copyBtn = document.getElementById('copyBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const apiModal = document.getElementById('apiModal');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const saveKeyBtn = document.getElementById('saveKeyBtn');
+    const cancelKeyBtn = document.getElementById('cancelKeyBtn');
+    const clearKeyBtn = document.getElementById('clearKeyBtn');
+    const inputError = document.getElementById('inputError');
+    const apiError = document.getElementById('apiError');
+    const keyError = document.getElementById('keyError');
+
+    // State
+    let apiKey = localStorage.getItem('gemini_api_key') || '';
+
+    // Initialize
+    function init() {
+        if (!apiKey) {
+            showModal();
+            cancelKeyBtn.style.display = 'none'; // Force input on first load
+        }
+    }
+
+    // Modal Logic
+    function showModal() {
+        apiKeyInput.value = apiKey;
+        apiModal.classList.add('active');
+        keyError.classList.remove('active');
+        if (apiKey) {
+            cancelKeyBtn.style.display = 'inline-flex';
+            clearKeyBtn.style.display = 'inline-flex';
+        } else {
+            clearKeyBtn.style.display = 'none';
+        }
+        setTimeout(() => apiKeyInput.focus(), 50);
+    }
+
+    function hideModal() {
+        if (apiKey) {
+            apiModal.classList.remove('active');
+        } else {
+            keyError.textContent = '必须提供 API Key 才能使用此工具';
+            keyError.classList.add('active');
+        }
+    }
+
+    settingsBtn.addEventListener('click', showModal);
+    cancelKeyBtn.addEventListener('click', hideModal);
+
+    clearKeyBtn.addEventListener('click', () => {
+        localStorage.removeItem('gemini_api_key');
+        apiKey = '';
+        apiKeyInput.value = '';
+        cancelKeyBtn.style.display = 'none';
+        clearKeyBtn.style.display = 'none';
+        keyError.textContent = 'API Key 已清除，请重新输入';
+        keyError.classList.add('active');
+    });
+
+    saveKeyBtn.addEventListener('click', () => {
+        const val = apiKeyInput.value.trim();
+        if (!val) {
+            keyError.textContent = 'API Key 不能为空';
+            keyError.classList.add('active');
+            return;
+        }
+        apiKey = val;
+        localStorage.setItem('gemini_api_key', apiKey);
+        hideModal();
+    });
+
+    // Copy Logic
+    copyBtn.addEventListener('click', async () => {
+        const text = resultOutput.value;
+        if (!text) return;
+        
+        try {
+            await navigator.clipboard.writeText(text);
+            const originalHtml = copyBtn.innerHTML;
+            copyBtn.innerHTML = `
+                <svg class="icon" style="width: 1em; height: 1em; margin-right: 4px;" viewBox="0 0 24 24">
+                    <path d="M20 6 9 17l-5-5"></path>
+                </svg>
+                已复制
+            `;
+            copyBtn.classList.add('copied');
+            
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHtml;
+                copyBtn.classList.remove('copied');
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+        }
+    });
+
+    // Optimize Logic
+    const SYSTEM_PROMPT = `你是一个专业的 GPT Image 2 提示词优化专家。Gemini 只负责改写提示词，不负责生成图片；最终图片将由官方 OpenAI gpt-image-2 生成。
+
+你的唯一任务：把用户的原始输入改写成一段高质量、可直接提交给 gpt-image-2 的英文图像生成或图像编辑 prompt。
+
+严格输出要求：
+- 只输出优化后的英文 prompt 本身。
+- 不要输出标题、解释、推荐参数、JSON、Markdown 代码块、项目符号、编号、中文说明或任何额外杂项。
+- 如果用户输入很短，也要只输出一段完整可用的英文 prompt。
+- 如果用户输入为空或无法理解，输出一句英文澄清问题，不要输出其他内容。
+
+改写原则：
+- 保留用户原始意图，不要擅自添加未被暗示的人物、品牌、商标、口号、剧情、logo、复杂背景或额外对象。
+- 如果用户输入已经具体，只做结构化整理和视觉表达增强；如果输入很泛，只补充必要的构图、场景、光线、材质和约束。
+- 使用清晰、具体、可维护的视觉语言，避免无意义堆叠词，例如 masterpiece、best quality、8K、ultra detailed，除非有具体视觉细节支撑。
+- 优先按 Scene/background -> Subject -> Key details -> Composition/framing -> Lighting/mood -> Style/medium -> Text -> Constraints 的顺序组织。
+- 明确 intended use 或 asset type，例如 ad, poster, UI mockup, infographic, product photo, packaging, logo, storyboard。
+- 写清主体、环境、关键物体、材质、纹理、空间关系、视角、主体位置、留白和画面层级。
+- 如果用户想要写实照片，直接使用 photorealistic，并补充自然光线、真实材质、皮肤/织物/表面细节和轻微真实瑕疵。
+- 对人物场景，描述身体可见范围、姿势、视线方向、动作和手部交互。
+- 对 UI、海报、信息图、包装、标签等结构化画面，明确布局、对齐、层级、留白、文字位置和可读性。
+- 所有需要出现在图中的文字必须放在英文双引号中，并说明字体风格、大小、颜色和位置。
+- 如果文字必须准确，加入 render the text exactly as written, no extra words, no duplicate text, no misspellings。
+- 如果用户没有要求文字，加入 no text 或 no extra text。
+- 对 logo 或品牌标识，要求 original, non-infringing, clean, simple, scalable，并避免现有商标。
+- 对多图输入，使用 Image 1, Image 2, Image 3 标注角色和用途，例如 base image, style reference, product reference, insert source。
+- 不要只写 combine these images；要明确 apply Image 2's style to Image 1 或 place the object from Image 2 into Image 1。
+- 对编辑任务，必须写清 change only what the user asked to change，并明确 preserve identity, geometry, layout, camera angle, lighting direction, labels, logo placement, surrounding objects 等不变量。
+- 对局部编辑或 mask 场景，仍要描述最终完整图像，而不是只描述被编辑区域。
+- 使用明确约束减少漂移，例如 no watermark, no extra text, no duplicate text, no logos or trademarks, no layout drift, preserve the original composition。
+
+用户的原始输入：
+`;
+
+    async function optimizePrompt() {
+        const userPrompt = promptInput.value.trim();
+        
+        // Validation
+        inputError.classList.remove('active');
+        apiError.classList.remove('active');
+        
+        if (!apiKey) {
+            showModal();
+            return;
+        }
+        
+        if (!userPrompt) {
+            inputError.classList.add('active');
+            promptInput.focus();
+            return;
+        }
+
+        // UI State: Loading
+        optimizeBtn.disabled = true;
+        optimizeBtn.classList.add('loading');
+        btnText.textContent = '优化中...';
+        resultOutput.value = '';
+
+        try {
+            const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: SYSTEM_PROMPT + userPrompt
+                        }]
+                    }]
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error?.message || `HTTP Error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.candidates?.[0]?.content?.parts) {
+                const resultText = data.candidates[0].content.parts.map(part => part.text).join('');
+                resultOutput.value = resultText;
+            } else {
+                throw new Error('API 返回格式异常');
+            }
+
+        } catch (error) {
+            console.error('Optimization error:', error);
+            apiError.textContent = `优化失败: ${error.message}`;
+            apiError.classList.add('active');
+            
+            if (error.message.includes('API_KEY_INVALID') || error.message.includes('403')) {
+                apiKey = '';
+                localStorage.removeItem('gemini_api_key');
+                setTimeout(showModal, 1500);
+            }
+        } finally {
+            // UI State: Reset
+            optimizeBtn.disabled = false;
+            optimizeBtn.classList.remove('loading');
+            btnText.textContent = '魔法优化';
+        }
+    }
+
+    optimizeBtn.addEventListener('click', optimizePrompt);
+
+    // Run init
+    init();
+</script>
+</body>
+</html>
