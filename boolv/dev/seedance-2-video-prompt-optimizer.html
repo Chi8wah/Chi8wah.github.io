@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seedance 2.0 视频提示词优化器</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --surface-color: #1e293b;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --error-color: #ef4444;
+            --success-color: #10b981;
+            --radius: 8px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: var(--spacing-xl) var(--spacing-md);
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.025em;
+        }
+
+        button {
+            font-family: inherit;
+            cursor: pointer;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-sm);
+        }
+
+        button:focus-visible {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-muted);
+            padding: var(--spacing-sm) var(--spacing-md);
+        }
+
+        .btn-ghost:hover {
+            background: var(--surface-color);
+            color: var(--text-main);
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+            padding: 12px var(--spacing-lg);
+            font-size: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-danger {
+            background: var(--error-color);
+            color: white;
+            padding: 6px 12px;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #dc2626;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .row-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-md);
+        }
+
+        @media (max-width: 640px) {
+            .row-group {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        textarea, input[type="text"], input[type="password"], select {
+            width: 100%;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            border-radius: var(--radius);
+            padding: var(--spacing-md);
+            font-family: inherit;
+            font-size: 1rem;
+            transition: border-color 0.2s ease;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        textarea:focus, input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 1px var(--primary-color);
+        }
+
+        textarea::placeholder, input::placeholder {
+            color: var(--text-muted);
+            opacity: 0.5;
+        }
+
+        .error-message {
+            color: var(--error-color);
+            font-size: 0.875rem;
+            margin-top: var(--spacing-sm);
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        /* Image Upload Styles */
+        .upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius);
+            padding: var(--spacing-xl);
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background-color 0.2s ease;
+        }
+
+        .upload-area:hover, .upload-area.dragover {
+            border-color: var(--primary-color);
+            background-color: rgba(59, 130, 246, 0.05);
+        }
+
+        .upload-area input[type="file"] {
+            display: none;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-md);
+        }
+
+        .image-card {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .image-preview {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .image-card-body {
+            padding: var(--spacing-sm);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .image-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        /* Result Styles */
+        .result-section {
+            display: none;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-xl);
+            padding-top: var(--spacing-xl);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .result-section.active {
+            display: flex;
+        }
+
+        .result-container {
+            position: relative;
+            background: #0b1120;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .result-output {
+            padding: calc(var(--spacing-md) + 18px) var(--spacing-md) var(--spacing-md);
+            overflow-y: auto;
+            max-height: 600px;
+            font-size: 0.875rem;
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .result-card {
+            background: rgba(30, 41, 59, 0.72);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: var(--radius);
+            padding: var(--spacing-md);
+        }
+
+        .result-card-title {
+            color: var(--text-main);
+            font-weight: 700;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .result-card-content {
+            color: var(--text-muted);
+            white-space: pre-wrap;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: var(--spacing-sm);
+            right: var(--spacing-sm);
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 6px 10px;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            opacity: 0;
+            transition: opacity 0.2s ease, background 0.2s ease;
+        }
+
+        .result-container:hover .copy-btn,
+        .result-container:focus-within .copy-btn,
+        .copy-btn:focus-visible {
+            opacity: 1;
+        }
+
+        .copy-btn:hover {
+            background: var(--border-color);
+            color: var(--text-main);
+        }
+
+        .copy-btn.copied {
+            color: var(--success-color);
+            border-color: var(--success-color);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: var(--spacing-xl);
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transform: translateY(10px);
+            transition: transform 0.2s ease;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .modal-desc {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-lg);
+        }
+
+        /* Icons */
+        .icon {
+            width: 1.25em;
+            height: 1.25em;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        /* Spinner */
+        .spinner {
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .loading .spinner {
+            display: block;
+        }
+
+        .loading .wand-icon {
+            display: none;
+        }
+
+        .constraint-card {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: var(--radius);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .constraint-card h3 {
+            font-size: 1rem;
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-sm);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .constraint-card ul {
+            list-style-position: inside;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-left: var(--spacing-sm);
+        }
+
+        .constraint-card li {
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Seedance 2.0 视频提示词优化器</h1>
+        <button id="settingsBtn" class="btn-ghost" type="button" aria-label="设置 API Key">
+            <svg class="icon" viewBox="0 0 24 24">
+                <title>设置</title>
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            API Key
+        </button>
+    </header>
+
+    <main style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+
+        <div class="constraint-card">
+            <h3>
+                <svg class="icon" viewBox="0 0 24 24"><title>约束</title><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                Seedance 2.0 约束说明
+            </h3>
+            <ul>
+                <li>图片参考最多 9 张，音视频图文混合输入总数不超过 12 个。</li>
+                <li>生成视频时长通常为 4-15 秒。</li>
+                <li>仅需首尾帧+提示词时，使用「首尾帧入口」；需要多模态组合参考时，使用「全能参考入口」。</li>
+                <li>避免依赖不支持的清晰写实真人面部上传（容易变形）。</li>
+            </ul>
+        </div>
+
+        <div class="row-group">
+            <div class="input-group">
+                <label for="productName">产品名称/信息 (必填)</label>
+                <input type="text" id="productName" placeholder="例如：智能降噪蓝牙耳机 Pro Max">
+                <div id="productNameError" class="error-message">请输入产品名称</div>
+            </div>
+            <div class="input-group">
+                <label for="coreSellingPoints">核心卖点 (必填)</label>
+                <input type="text" id="coreSellingPoints" placeholder="例如：主动降噪、50小时续航、空间音频">
+                <div id="coreSellingPointsError" class="error-message">请输入核心卖点</div>
+            </div>
+        </div>
+
+        <div class="row-group">
+            <div class="input-group">
+                <label for="targetAudience">目标受众/痛点</label>
+                <input type="text" id="targetAudience" placeholder="例如：通勤族、学生 / 环境嘈杂无法专注">
+            </div>
+            <div class="input-group">
+                <label for="videoType">视频类型</label>
+                <select id="videoType">
+                    <option value="电商带货">电商带货 (E-commerce)</option>
+                    <option value="品牌宣传">品牌宣传 (Brand Promo)</option>
+                    <option value="产品演示">产品演示 (Product Demo)</option>
+                    <option value="用户评价">用户评价 (Testimonial)</option>
+                    <option value="剧情短片">剧情短片 (Short Story)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="row-group">
+            <div class="input-group">
+                <label for="duration">预期时长</label>
+                <select id="duration">
+                    <option value="5秒">5秒 (短平快)</option>
+                    <option value="10秒" selected>10秒 (标准)</option>
+                    <option value="15秒">15秒 (完整叙事)</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="platform">投放平台/画幅</label>
+                <select id="platform">
+                    <option value="TikTok/抖音/Reels (9:16)">TikTok/抖音/Reels (9:16)</option>
+                    <option value="YouTube/B站 (16:9)">YouTube/B站 (16:9)</option>
+                    <option value="Instagram/朋友圈 (1:1)">Instagram/朋友圈 (1:1)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label for="hookDirection">黄金前三秒 / Hook 方向</label>
+            <input type="text" id="hookDirection" placeholder="例如：提出痛点问题“还在忍受地铁噪音？”或展示夸张对比">
+        </div>
+
+        <div class="input-group">
+            <label for="sceneScenario">场景 / 使用场景</label>
+            <input type="text" id="sceneScenario" placeholder="例如：拥挤嘈杂的地铁车厢、安静的图书馆、户外跑步">
+        </div>
+
+        <div class="row-group">
+            <div class="input-group">
+                <label for="voiceover">配音语言/语调</label>
+                <input type="text" id="voiceover" placeholder="例如：中文，充满活力、有说服力">
+            </div>
+            <div class="input-group">
+                <label for="cta">行动号召 (CTA)</label>
+                <input type="text" id="cta" placeholder="例如：点击左下角链接立即抢购，限时半价">
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label for="additionalConstraints">其他约束/特殊要求</label>
+            <textarea id="additionalConstraints" placeholder="例如：画面必须保持明亮色调，不要出现竞品标志..."></textarea>
+        </div>
+
+        <div class="input-group">
+            <label>参考图片 (最多 9 张)</label>
+            <div class="upload-area" id="uploadArea">
+                <svg class="icon" style="width: 32px; height: 32px; margin-bottom: 8px; color: var(--text-muted);" viewBox="0 0 24 24">
+                    <title>上传</title>
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <p>点击或拖拽图片到此处上传</p>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">支持 JPG, PNG, WEBP 格式</p>
+                <input type="file" id="fileInput" accept="image/*" multiple>
+            </div>
+            <div id="imageError" class="error-message">图片数量不能超过 9 张，且每张图片必须选择角色</div>
+            <div class="image-grid" id="imageGrid"></div>
+        </div>
+
+        <button id="generateBtn" class="btn-primary" type="button">
+            <svg class="icon wand-icon" viewBox="0 0 24 24">
+                <title>生成</title>
+                <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41L13.7 2.7a2.41 2.41 0 0 0-3.41 0z"></path>
+                <path d="M2 2l20 20"></path>
+            </svg>
+            <svg class="icon spinner" viewBox="0 0 24 24">
+                <title>加载中</title>
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-dasharray="32" stroke-dashoffset="32" fill="none"></circle>
+            </svg>
+            生成 Seedance 提示词
+        </button>
+
+        <div id="resultSection" class="result-section">
+            <h2>生成的提示词</h2>
+            <div class="result-container">
+                <button id="copyBtn" class="copy-btn" type="button" aria-label="复制结果">复制</button>
+                <div id="resultOutput" class="result-output"></div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- API Key Modal -->
+<div id="apiModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">设置 Gemini API Key</h2>
+            <p class="modal-desc">密钥将仅保存在您的浏览器本地，不会上传到任何服务器。</p>
+        </div>
+        <div class="input-group">
+            <label for="apiKeyInput">API Key</label>
+            <input type="password" id="apiKeyInput" placeholder="AIzaSy...">
+            <div id="apiKeyError" class="error-message">请输入有效的 API Key</div>
+        </div>
+        <div class="modal-actions">
+            <button id="clearKeyBtn" class="btn-ghost" type="button">清除</button>
+            <button id="cancelKeyBtn" class="btn-ghost" type="button">取消</button>
+            <button id="saveKeyBtn" class="btn-primary" type="button">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // State
+    let uploadedImages = []; // { id, file, dataUrl, base64, mimeType, role }
+    let rawResultText = '';
+
+    // DOM Elements
+    const settingsBtn = document.getElementById('settingsBtn');
+    const apiModal = document.getElementById('apiModal');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const saveKeyBtn = document.getElementById('saveKeyBtn');
+    const cancelKeyBtn = document.getElementById('cancelKeyBtn');
+    const clearKeyBtn = document.getElementById('clearKeyBtn');
+    const apiKeyError = document.getElementById('apiKeyError');
+
+    const productNameInput = document.getElementById('productName');
+    const coreSellingPointsInput = document.getElementById('coreSellingPoints');
+    const productNameError = document.getElementById('productNameError');
+    const coreSellingPointsError = document.getElementById('coreSellingPointsError');
+
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const imageGrid = document.getElementById('imageGrid');
+    const imageError = document.getElementById('imageError');
+
+    const generateBtn = document.getElementById('generateBtn');
+    const resultSection = document.getElementById('resultSection');
+    const resultOutput = document.getElementById('resultOutput');
+    const copyBtn = document.getElementById('copyBtn');
+
+    // API Key Management
+    function getApiKey() {
+        return localStorage.getItem('gemini_api_key');
+    }
+
+    function setApiKey(key) {
+        localStorage.setItem('gemini_api_key', key);
+    }
+
+    function clearApiKey() {
+        localStorage.removeItem('gemini_api_key');
+    }
+
+    function showModal() {
+        apiKeyInput.value = getApiKey() || '';
+        apiKeyError.classList.remove('active');
+        apiModal.classList.add('active');
+    }
+
+    function hideModal() {
+        apiModal.classList.remove('active');
+    }
+
+    settingsBtn.addEventListener('click', showModal);
+    cancelKeyBtn.addEventListener('click', hideModal);
+
+    clearKeyBtn.addEventListener('click', () => {
+        clearApiKey();
+        apiKeyInput.value = '';
+        hideModal();
+    });
+
+    saveKeyBtn.addEventListener('click', () => {
+        const key = apiKeyInput.value.trim();
+        if (!key) {
+            apiKeyError.classList.add('active');
+            return;
+        }
+        setApiKey(key);
+        hideModal();
+    });
+
+    // Image Upload Handling
+    uploadArea.addEventListener('click', () => fileInput.click());
+
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+        fileInput.value = ''; // Reset
+    });
+
+    function handleFiles(files) {
+        const newFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+
+        if (uploadedImages.length + newFiles.length > 9) {
+            imageError.textContent = '最多只能上传 9 张图片';
+            imageError.classList.add('active');
+            return;
+        }
+
+        imageError.classList.remove('active');
+
+        newFiles.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const dataUrl = e.target.result;
+                const base64 = dataUrl.split(',')[1];
+                const id = Date.now() + Math.random().toString(36).substring(2, 9);
+
+                uploadedImages.push({
+                    id,
+                    file,
+                    dataUrl,
+                    base64,
+                    mimeType: file.type,
+                    role: ''
+                });
+
+                renderImageGrid();
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function removeImage(id) {
+        uploadedImages = uploadedImages.filter(img => img.id !== id);
+        renderImageGrid();
+    }
+
+    function updateImageRole(id, role) {
+        const img = uploadedImages.find(i => i.id === id);
+        if (img) {
+            img.role = role;
+        }
+    }
+
+    window.removeImage = removeImage;
+    window.updateImageRole = updateImageRole;
+
+    function renderImageGrid() {
+        imageGrid.innerHTML = '';
+
+        uploadedImages.forEach((img, index) => {
+            const card = document.createElement('div');
+            card.className = 'image-card';
+
+            const imgNum = index + 1;
+
+            card.innerHTML = `
+                <img src="${img.dataUrl}" class="image-preview" alt="Preview">
+                <div class="image-card-body">
+                    <div class="image-card-header">
+                        <span>@图片${imgNum}</span>
+                        <button type="button" class="btn-danger" style="padding: 2px 6px; font-size: 0.75rem;" onclick="removeImage('${img.id}')">删除</button>
+                    </div>
+                    <select onchange="updateImageRole('${img.id}', this.value)" style="padding: 4px; font-size: 0.875rem;">
+                        <option value="" disabled ${!img.role ? 'selected' : ''}>选择角色 (必填)</option>
+                        <option value="产品" ${img.role === '产品' ? 'selected' : ''}>产品</option>
+                        <option value="包装" ${img.role === '包装' ? 'selected' : ''}>包装</option>
+                        <option value="首帧" ${img.role === '首帧' ? 'selected' : ''}>首帧</option>
+                        <option value="尾帧" ${img.role === '尾帧' ? 'selected' : ''}>尾帧</option>
+                        <option value="使用场景" ${img.role === '使用场景' ? 'selected' : ''}>使用场景</option>
+                        <option value="代言人/数字人" ${img.role === '代言人/数字人' ? 'selected' : ''}>代言人/数字人</option>
+                        <option value="风格/情绪" ${img.role === '风格/情绪' ? 'selected' : ''}>风格/情绪</option>
+                        <option value="分镜/动态参考" ${img.role === '分镜/动态参考' ? 'selected' : ''}>分镜/动态参考</option>
+                        <option value="其他" ${img.role === '其他' ? 'selected' : ''}>其他</option>
+                    </select>
+                </div>
+            `;
+            imageGrid.appendChild(card);
+        });
+    }
+
+    // Form Validation
+    function validateForm() {
+        let isValid = true;
+
+        if (!productNameInput.value.trim()) {
+            productNameError.classList.add('active');
+            isValid = false;
+        } else {
+            productNameError.classList.remove('active');
+        }
+
+        if (!coreSellingPointsInput.value.trim()) {
+            coreSellingPointsError.classList.add('active');
+            isValid = false;
+        } else {
+            coreSellingPointsError.classList.remove('active');
+        }
+
+        if (uploadedImages.length > 9) {
+            imageError.textContent = '最多只能上传 9 张图片';
+            imageError.classList.add('active');
+            isValid = false;
+        } else if (uploadedImages.some(img => !img.role)) {
+            imageError.textContent = '请为所有上传的图片选择角色';
+            imageError.classList.add('active');
+            isValid = false;
+        } else {
+            imageError.classList.remove('active');
+        }
+
+        return isValid;
+    }
+
+    function renderResult(text) {
+        resultOutput.innerHTML = '';
+        const card = document.createElement('section');
+        card.className = 'result-card';
+
+        const title = document.createElement('div');
+        title.className = 'result-card-title';
+        title.textContent = 'Seedance 可复制提示词';
+        card.appendChild(title);
+
+        const content = document.createElement('div');
+        content.className = 'result-card-content';
+        content.textContent = text.trim();
+        card.appendChild(content);
+
+        resultOutput.appendChild(card);
+    }
+
+    // Generate Prompt
+    generateBtn.addEventListener('click', async () => {
+        const apiKey = getApiKey();
+        if (!apiKey) {
+            showModal();
+            return;
+        }
+
+        if (!validateForm()) {
+            return;
+        }
+
+        generateBtn.disabled = true;
+        generateBtn.classList.add('loading');
+        resultSection.classList.remove('active');
+
+        try {
+            const parts = buildGeminiParts();
+
+            const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                },
+                body: JSON.stringify({
+                    contents: [{ parts }]
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                if (response.status === 401 || response.status === 403) {
+                    clearApiKey();
+                    showModal();
+                }
+                throw new Error(errorData.error?.message || 'API 请求失败');
+            }
+
+            const data = await response.json();
+            rawResultText = data.candidates[0].content.parts[0].text;
+
+            renderResult(rawResultText);
+            resultSection.classList.add('active');
+
+            // Scroll to result
+            resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        } catch (error) {
+            alert(`生成失败: ${error.message}`);
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.classList.remove('loading');
+        }
+    });
+
+    function buildGeminiParts() {
+        const parts = [];
+
+        // System Prompt / Instructions
+        const systemPrompt = `你是一个专业的 Seedance 2.0 电商短视频提示词工程师。Gemini 只负责理解用户简报和参考图片，然后改写出一段可直接复制到即梦 / Seedance 2.0 的视频生成提示词；不要生成视频，不要解释你的分析过程。
+
+【唯一输出要求】
+- 只输出最终 Seedance 2.0 提示词正文，不要输出标题、Markdown 代码块、分析说明、素材诊断、推荐参数、JSON、项目符号列表或多个小节。
+- 输出必须是一段完整、可复制、可直接粘贴到 Seedance 2.0 的中文提示词。
+- 如果用户要求英文口播或其他语言口播，只让口播台词使用对应语言；其余提示词仍使用中文，便于用户理解和调整。
+
+【Seedance 2.0 写法原则】
+1. 先写清楚素材关系：必须逐一引用所有上传图片，使用 @图片1、@图片2 这种格式，并说明每张图是生成对象还是参考对象。素材多时尤其要避免把商品图、场景图、风格图、首尾帧图、数字人图混淆。
+2. 区分“使用对象”和“参考对象”：产品/包装图用于锚定商品外观、结构、材质、颜色、Logo 和包装信息；场景图用于锚定空间、氛围和使用环境；风格图只参考画面风格/色调/质感，不复制其中主体；首帧图必须作为开场画面；尾帧图必须作为最终状态；分镜/动态参考图只参考构图、动作或镜头方向。
+3. 按时序写故事线：根据用户选择的时长写 0-3 秒、3-8 秒、8-12 秒、12-15 秒这类分段；短视频必须在前 3 秒给出 Hook，中段展示产品或使用过程，结尾给出明确 CTA。
+4. 写清楚画面细节：每个时间段都要包含主体动作、商品出现方式、镜头景别、运镜、场景变化、情绪/节奏、声音或口播。不要只写“展示产品”这类空话。
+5. 写清楚连续性：商品外观、包装、颜色、Logo、关键结构、人物服装和场景关系要在全片保持一致；如果用户要求一镜到底，要明确“全程不要切镜头”；如果用户要求首尾帧，要让首帧和尾帧分别承担起始状态与最终状态。
+6. 必要限制只内联在提示词正文中，不要单独输出限制类小节。只有当场景相关时才写“不要出现人物”“全程不要切镜头”“不要新增无关商品”“不要出现竞品标志”等具体约束，不要泛泛堆叠无关限制词。
+7. 避免承诺平台不支持的能力：如果参考图包含清晰写实真人脸，不要承诺精准复刻真人脸；应改写为数字人、背影、手部、局部动作、不露脸或弱露脸展示。
+8. 不要编造用户没有给出的品牌、折扣、医学功效、夸张承诺或无法验证的数据；可以合理补充镜头、节奏、场景和口播表达。
+
+【不同视频类型的默认模板】
+- 商品开箱展示：开场直接出现包裹/包装/商品形成 Hook；随后手部拆封、展示包装和配件；中段用特写表现材质、质感和第一反应；结尾放入真实使用场景并引导下单。
+- 商品使用展示 / 产品演示：先呈现痛点或使用前状态；商品出场；用 2-3 个清晰动作证明核心卖点；展示使用后结果；结尾给出 CTA。
+- AI 数字人口播介绍：数字人或不露脸人物用自然口播开场；镜头切到商品特写和使用动作；口播解释 2-3 个核心卖点；结尾回到商品与购买入口。避免依赖清晰写实真人脸。
+- 试穿 / 试用：先用上身/上手效果抓住注意力；展示正面、侧面、细节、动作变化；强调舒适度、质感、适配场景；结尾引导下单。
+- 多场景展示：围绕同一个商品连续切换 2-4 个高相关场景；每个场景只强调一个卖点；保持商品身份一致；结尾做总览和 CTA。
+- 首尾帧 / 一镜到底：明确 @图片N 为首帧或尾帧；用连续镜头描述从起始状态到最终状态的变化；如为一镜到底，必须写清镜头路径、推进/拉远/跟随/摇移方式和中途遮挡转场。
+- 纯商品商业运镜：围绕商品做微距、侧面、旋转、推近、材质细节、功能局部、英雄镜头；适合无人物或不露脸场景。
+
+【电商短视频质量标准】
+- 默认追求平台原生感、画面真实自然、卖点完整清晰、口播清晰、商品始终可见、结尾引导下单。
+- Hook 可以是痛点直击、结果前置、价格/福利、反差悬念、新奇画面、场景式演绎或节日/人群定向；根据用户输入选择最合适的一种，不要同时堆叠太多。
+- 口播要短句、自然、有转化意图；CTA 要具体，例如“点击左下角链接下单”“现在领取限时优惠”。
+- 如果用户信息不足，直接做合理补全，不要向用户提问；但不要补充虚假品牌、虚假折扣和虚假认证。
+
+【用户简报信息】
+- 产品名称/信息：${document.getElementById('productName').value}
+- 核心卖点：${document.getElementById('coreSellingPoints').value}
+- 目标受众/痛点：${document.getElementById('targetAudience').value || '未提供'}
+- 视频类型：${document.getElementById('videoType').value}
+- 预期时长：${document.getElementById('duration').value}
+- 投放平台/画幅：${document.getElementById('platform').value}
+- Hook 方向：${document.getElementById('hookDirection').value || '未提供'}
+- 场景/使用场景：${document.getElementById('sceneScenario').value || '未提供'}
+- 配音语言/语调：${document.getElementById('voiceover').value || '未提供'}
+- 行动号召 (CTA)：${document.getElementById('cta').value || '未提供'}
+- 其他约束：${document.getElementById('additionalConstraints').value || '无'}
+
+请直接输出最终的提示词内容，保持专业、清晰、结构化。`;
+
+        parts.push({ text: systemPrompt });
+
+        // Add Images
+        uploadedImages.forEach((img, index) => {
+            const imgNum = index + 1;
+            parts.push({ text: `\n这是 @图片${imgNum} (文件名: ${img.file.name})，用户指定的角色是：${img.role}。请在提示词中合理使用它。` });
+            parts.push({
+                inlineData: {
+                    mimeType: img.mimeType,
+                    data: img.base64
+                }
+            });
+        });
+
+        return parts;
+    }
+
+    // Copy functionality
+    copyBtn.addEventListener('click', () => {
+        if (!rawResultText) return;
+
+        navigator.clipboard.writeText(rawResultText).then(() => {
+            copyBtn.textContent = '已复制';
+            copyBtn.classList.add('copied');
+
+            setTimeout(() => {
+                copyBtn.textContent = '复制';
+                copyBtn.classList.remove('copied');
+            }, 2000);
+        }).catch(err => {
+            console.error('复制失败:', err);
+            alert('复制失败，请手动复制');
+        });
+    });
+
+</script>
+</body>
+</html>
