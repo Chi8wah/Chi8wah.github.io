@@ -1,2 +1,4 @@
 .DS_Store
 .sisyphus/
+.env.local
+/boolv/dev/outputs
