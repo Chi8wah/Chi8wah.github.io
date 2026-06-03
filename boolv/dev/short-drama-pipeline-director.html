@@ -1,0 +1,3312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>短剧 AIGC 生产管线 (Pipeline Director)</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --surface-color: #1e293b;
+            --surface-hover: #334155;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --error-color: #ef4444;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --locked-color: #475569;
+            --radius: 8px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--spacing-xl) var(--spacing-md);
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.025em;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: var(--spacing-md);
+        }
+
+        button {
+            font-family: inherit;
+            cursor: pointer;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-sm);
+            padding: 0.5rem 1rem;
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: var(--primary-hover);
+        }
+
+        button:focus-visible {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background-color: var(--locked-color);
+        }
+
+        .btn-ghost {
+            background-color: transparent;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-ghost:hover:not(:disabled) {
+            background-color: var(--surface-hover);
+        }
+
+        .pipeline {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        .stage-card {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: var(--spacing-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            transition: border-color 0.2s ease;
+        }
+
+        .stage-card.locked {
+            opacity: 0.7;
+            border-style: dashed;
+        }
+
+        .stage-card.active {
+            border-color: var(--primary-color);
+        }
+
+        .stage-card.done {
+            border-color: var(--success-color);
+        }
+
+        .stage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stage-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-locked { background-color: var(--locked-color); color: white; }
+        .status-ready { background-color: var(--primary-color); color: white; }
+        .status-done { background-color: var(--success-color); color: white; }
+        .status-error { background-color: var(--error-color); color: white; }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        input, select, textarea {
+            font-family: inherit;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            color: var(--text-main);
+            padding: 0.75rem;
+            font-size: 0.875rem;
+            transition: border-color 0.2s ease;
+            width: 100%;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-md);
+        }
+
+        .output-section {
+            display: none;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-md);
+            padding-top: var(--spacing-md);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .output-section.active {
+            display: flex;
+        }
+
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .output-summary {
+            display: grid;
+            gap: var(--spacing-md);
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+            gap: var(--spacing-sm);
+        }
+
+        .summary-stat, .summary-card {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            background: rgba(15, 23, 42, 0.4);
+            padding: var(--spacing-md);
+        }
+
+        .summary-stat strong {
+            display: block;
+            color: var(--text-main);
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .summary-stat span, .summary-meta, .summary-muted {
+            color: var(--text-muted);
+            font-size: 0.8125rem;
+        }
+
+        .summary-list {
+            display: grid;
+            gap: var(--spacing-sm);
+        }
+
+        .summary-card {
+            display: grid;
+            gap: var(--spacing-sm);
+        }
+
+        .summary-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: var(--spacing-sm);
+        }
+
+        .summary-card-title {
+            font-weight: 600;
+            color: var(--text-main);
+            word-break: break-word;
+        }
+
+        .summary-code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.8125rem;
+            color: var(--primary-color);
+            word-break: break-word;
+        }
+
+        .summary-prompt {
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: rgba(2, 6, 23, 0.45);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: var(--spacing-sm);
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+
+        pre {
+            background-color: var(--bg-color);
+            padding: var(--spacing-md);
+            border-radius: var(--radius);
+            overflow-x: auto;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.875rem;
+            border: 1px solid var(--border-color);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .json-details {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            background: rgba(15, 23, 42, 0.25);
+            overflow: hidden;
+        }
+
+        .json-details > summary {
+            cursor: pointer;
+            padding: var(--spacing-sm) var(--spacing-md);
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            user-select: none;
+        }
+
+        .json-details > pre {
+            border: 0;
+            border-top: 1px solid var(--border-color);
+            border-radius: 0;
+            margin: 0;
+        }
+
+        .error-msg {
+            color: var(--error-color);
+            font-size: 0.875rem;
+            margin-top: var(--spacing-sm);
+            display: none;
+        }
+
+        .error-msg.active {
+            display: block;
+        }
+
+        .stage-contract {
+            margin: var(--spacing-md) 0;
+            padding: var(--spacing-md);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            background: rgba(15, 23, 42, 0.35);
+            display: grid;
+            gap: var(--spacing-sm);
+        }
+
+        .stage-contract-row {
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+        }
+
+        .stage-contract-row strong {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: var(--spacing-xl);
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transform: translateY(10px);
+            transition: transform 0.2s ease;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .modal-desc {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-lg);
+        }
+
+        .model-helper {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            line-height: 1.4;
+        }
+
+        .spinner {
+            animation: spin 1s linear infinite;
+            display: none;
+            width: 1.25em;
+            height: 1.25em;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        button.loading .spinner {
+            display: inline-block;
+        }
+        button.loading .btn-text {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>短剧 AIGC 生产管线 (Pipeline Director)</h1>
+            <div class="header-actions">
+                <button id="btn-api-key" class="btn-ghost" type="button">
+                    <svg class="icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    API 设置
+                </button>
+            </div>
+        </header>
+
+        <div class="pipeline">
+            <!-- Stage 1 -->
+            <div class="stage-card active" id="stage1-card">
+                <div class="stage-header">
+                    <div class="stage-title">
+                        <span class="status-badge status-ready" id="stage1-status">Ready</span>
+                        阶段 1: 剧本解析 (Script Parsing)
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="s1-script">剧本内容 (Script)</label>
+                    <textarea id="s1-script" placeholder="输入短剧剧本..."></textarea>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label for="s1-duration">目标时长 (Duration Range)</label>
+                        <input type="text" id="s1-duration" value="60-90秒" placeholder="例如: 60-90秒">
+                    </div>
+                    <div class="form-group">
+                        <label for="s1-style">视觉风格 (Visual Style)</label>
+                        <input type="text" id="s1-style" value="写实，电影感，冷色调" placeholder="例如: 写实，电影感">
+                    </div>
+                    <div class="form-group">
+                        <label for="s1-aspect">画幅比例 (Aspect Ratio)</label>
+                        <select id="s1-aspect">
+                            <option value="9:16">9:16 (竖屏)</option>
+                            <option value="16:9">16:9 (横屏)</option>
+                            <option value="1:1">1:1 (方屏)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="s1-lang">语言 (Language)</label>
+                        <select id="s1-lang">
+                            <option value="zh-CN">中文 (zh-CN)</option>
+                            <option value="en-US">英文 (en-US)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="s1-auto-resolve">自动决策模式 (Automation Mode)</label>
+                        <select id="s1-auto-resolve">
+                            <option value="yes" selected>全自动：模型自行合理解决问题</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="error-msg" id="s1-error"></div>
+                <div>
+                    <button id="btn-run-s1" type="button">
+                        <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"></circle></svg>
+                        <span class="btn-text">运行阶段 1</span>
+                    </button>
+                </div>
+                <div class="output-section" id="s1-output-sec">
+                    <div class="output-header">
+                        <label>解析结果摘要</label>
+                        <button class="btn-ghost" id="btn-copy-s1" type="button">复制 JSON</button>
+                    </div>
+                    <div class="output-summary" id="s1-summary"></div>
+                    <details class="json-details">
+                        <summary>解析结果完整 JSON</summary>
+                        <pre id="s1-json"></pre>
+                    </details>
+                </div>
+            </div>
+
+            <!-- Stage 2 -->
+            <div class="stage-card locked" id="stage2-card">
+                <div class="stage-header">
+                    <div class="stage-title">
+                        <span class="status-badge status-locked" id="stage2-status">Locked</span>
+                        阶段 2: 资产圣经 (Asset Bible)
+                    </div>
+                </div>
+                <p style="font-size: 0.875rem; color: var(--text-muted);">基于阶段 1 的解析结果，定义角色、场景、道具的基础版本和变体版本，建立连续性规则。</p>
+                <div class="error-msg" id="s2-error"></div>
+                <div>
+                    <button id="btn-run-s2" type="button" disabled>
+                        <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"></circle></svg>
+                        <span class="btn-text">运行阶段 2</span>
+                    </button>
+                </div>
+                <div class="output-section" id="s2-output-sec">
+                    <div class="output-header">
+                        <label>资产圣经摘要</label>
+                        <button class="btn-ghost" id="btn-copy-s2" type="button">复制 JSON</button>
+                    </div>
+                    <div class="output-summary" id="s2-summary"></div>
+                    <details class="json-details">
+                        <summary>资产圣经完整 JSON</summary>
+                        <pre id="s2-json"></pre>
+                    </details>
+                </div>
+            </div>
+
+            <!-- Stage 3 -->
+            <div class="stage-card locked" id="stage3-card">
+                <div class="stage-header">
+                    <div class="stage-title">
+                        <span class="status-badge status-locked" id="stage3-status">Locked</span>
+                        阶段 3: 视频分段计划 (Video Segment Plan)
+                    </div>
+                </div>
+                <p style="font-size: 0.875rem; color: var(--text-muted);">将故事节拍映射为 5-15 秒的视频生成单元，保留连续性和节奏。</p>
+                <div class="stage-contract" aria-label="阶段 3 契约">
+                    <div class="stage-contract-row"><strong>输入：</strong>阶段 1 剧本解析 JSON + 阶段 2 资产圣经 JSON。</div>
+                    <div class="stage-contract-row"><strong>输出：</strong>5-15 秒视频分段、段内 shots、叙事目标、出现资产版本、台词/旁白/音频规划、连续性检查。</div>
+                    <div class="stage-contract-row"><strong>禁止：</strong>参考图生成方案、GPT-Image-2 提示词、Seedance 最终提示词、模型参数或真实生成指令。</div>
+                    <div class="stage-contract-row"><strong>自动化：</strong>运行后自动记录分段假设、资产使用强度和连续性决策，直接进入阶段 4。</div>
+                </div>
+                <div class="error-msg" id="s3-error"></div>
+                <div>
+                    <button id="btn-run-s3" type="button" disabled>
+                        <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"></circle></svg>
+                        <span class="btn-text">运行阶段 3</span>
+                    </button>
+                </div>
+                <div class="output-section" id="s3-output-sec">
+                    <div class="output-header">
+                        <label>视频分段计划摘要</label>
+                        <button class="btn-ghost" id="btn-copy-s3" type="button">复制 JSON</button>
+                    </div>
+                    <div class="output-summary" id="s3-summary"></div>
+                    <details class="json-details">
+                        <summary>视频分段计划完整 JSON</summary>
+                        <pre id="s3-json"></pre>
+                    </details>
+                </div>
+            </div>
+
+            <!-- Stage 4 -->
+            <div class="stage-card locked" id="stage4-card">
+                <div class="stage-header">
+                    <div class="stage-title">
+                        <span class="status-badge status-locked" id="stage4-status">Locked</span>
+                        阶段 4: 参考图生成计划 (Reference Image Generation Plan)
+                    </div>
+                </div>
+                <p style="font-size: 0.875rem; color: var(--text-muted);">决定哪些资产需要复用、生成或编辑，确定参考图生成的依赖顺序。</p>
+                <div class="stage-contract" aria-label="阶段 4 契约">
+                    <div class="stage-contract-row"><strong>输入：</strong>阶段 2 资产圣经 JSON + 阶段 3 视频分段计划 JSON。</div>
+                    <div class="stage-contract-row"><strong>输出：</strong>复用/生成/编辑决策、依赖顺序、所需参考图类型。</div>
+                    <div class="stage-contract-row"><strong>禁止：</strong>GPT-Image-2 最终提示词、Seedance 提示词、模型参数或真实生成指令。</div>
+                    <div class="stage-contract-row"><strong>自动化：</strong>自动选择最小参考图集合并记录省略原因，直接进入阶段 5。</div>
+                </div>
+                <div class="error-msg" id="s4-error"></div>
+                <div>
+                    <button id="btn-run-s4" type="button" disabled>
+                        <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"></circle></svg>
+                        <span class="btn-text">运行阶段 4</span>
+                    </button>
+                </div>
+                <div class="output-section" id="s4-output-sec">
+                    <div class="output-header">
+                        <label>参考图生成计划摘要</label>
+                        <button class="btn-ghost" id="btn-copy-s4" type="button">复制 JSON</button>
+                    </div>
+                    <div class="output-summary" id="s4-summary"></div>
+                    <details class="json-details">
+                        <summary>参考图生成计划完整 JSON</summary>
+                        <pre id="s4-json"></pre>
+                    </details>
+                </div>
+            </div>
+
+            <!-- Stage 5 -->
+            <div class="stage-card locked" id="stage5-card">
+                <div class="stage-header">
+                    <div class="stage-title">
+                        <span class="status-badge status-locked" id="stage5-status">Locked</span>
+                        阶段 5: GPT-Image-2 提示词队列 (GPT-Image-2 Prompt Queue)
+                    </div>
+                </div>
+                <div class="stage-contract">
+                    <div class="stage-contract-row"><strong>输入：</strong>阶段 2 资产圣经 JSON + 阶段 4 参考图生成计划 JSON。</div>
+                    <div class="stage-contract-row"><strong>输出：</strong>GPT-Image-2 静态图提示词队列。</div>
+                    <div class="stage-contract-row"><strong>禁止：</strong>Seedance 提示词、视频提示词/指令、真实图像 API 执行。</div>
+                    <div class="stage-contract-row"><strong>自动化：</strong>自动校验提示词覆盖和省略资产说明，直接进入阶段 6。</div>
+                </div>
+                <div class="error-msg" id="s5-error"></div>
+                <div class="progress-msg" id="s5-progress" style="display: none; font-size: 0.875rem; color: var(--primary-color); margin-bottom: var(--spacing-md);"></div>
+                <div>
+                    <button id="btn-run-s5" type="button" disabled>
+                        <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"></circle></svg>
+                        <span class="btn-text">运行阶段 5</span>
+                    </button>
+                </div>
+                <div class="output-section" id="s5-output-sec">
+                    <div class="output-header">
+                        <label>图片提示词执行清单</label>
+                        <button class="btn-ghost" id="btn-copy-s5" type="button">复制 JSON</button>
+                    </div>
+                    <div class="output-summary" id="s5-summary"></div>
+                    <details class="json-details">
+                        <summary>GPT-Image-2 提示词队列完整 JSON</summary>
+                        <pre id="s5-json"></pre>
+                    </details>
+                </div>
+            </div>
+
+            <!-- Stage 6 -->
+            <div class="stage-card locked" id="stage6-card">
+                <div class="stage-header">
+                    <div class="stage-title">
+                        <span class="status-badge status-locked" id="stage6-status">Locked</span>
+                        阶段 6: Seedance 分镜提示词队列 (Seedance Shot Prompt Queue)
+                    </div>
+                </div>
+                <div class="stage-contract">
+                    <div class="stage-contract-row"><strong>输入：</strong>阶段 3 视频段落计划 + 阶段 5 参考图提示词队列 + 参考图 Manifest。</div>
+                    <div class="stage-contract-row"><strong>输出：</strong>Seedance 2.0 视频分镜提示词队列，采用 Lumenflow 式时间块结构并按段落引用 @图片N。</div>
+                    <div class="stage-contract-row"><strong>限制：</strong>每段最多 9 张参考图，时长 4-15 秒，只生成提示词 JSON，不调用视频 API。</div>
+                    <div class="stage-contract-row"><strong>自动化：</strong>自动生成参考图 Manifest，并把未生成图的资产写入 Seedance 文本提示词。</div>
+                </div>
+                <div class="form-group">
+                    <label for="s6-manifest">参考图 Manifest (Reference Image Manifest)</label>
+                    <textarea id="s6-manifest" placeholder="阶段 5 完成后会自动生成，可按实际上传顺序修改 @图片N 与用途。" style="min-height: 14rem;"></textarea>
+                </div>
+                <div class="error-msg" id="s6-error"></div>
+                <div class="progress-msg" id="s6-progress" style="display: none; font-size: 0.875rem; color: var(--primary-color); margin-bottom: var(--spacing-md);"></div>
+                <div>
+                    <button id="btn-run-s6" type="button" disabled>
+                        <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"></circle></svg>
+                        <span class="btn-text">运行阶段 6</span>
+                    </button>
+                </div>
+                <div class="output-section" id="s6-output-sec">
+                    <div class="output-header">
+                        <label>视频提示词执行清单</label>
+                        <button class="btn-ghost" id="btn-copy-s6" type="button">复制 JSON</button>
+                    </div>
+                    <div class="output-summary" id="s6-summary"></div>
+                    <details class="json-details">
+                        <summary>Seedance 分镜提示词队列完整 JSON</summary>
+                        <pre id="s6-json"></pre>
+                    </details>
+                </div>
+            </div>
+
+            <!-- Stage 7 (Locked) -->
+            <div class="stage-card locked">
+                <div class="stage-header">
+                    <div class="stage-title">
+                        <span class="status-badge status-locked">Locked</span>
+                        阶段 7: 最终生成与人工审核 (Final Generation & Review)
+                    </div>
+                </div>
+                <p style="font-size: 0.875rem; color: var(--text-muted);">执行生成并审核一致性、质量、故事清晰度和连续性。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Key Modal -->
+    <div class="modal-overlay" id="api-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">设置 Gemini 供应商 API Key</h2>
+                <p class="modal-desc">您的 API Key 保存在浏览器 localStorage（持久化存储）中，未加密，可被同源脚本或浏览器扩展读取。生成时会将 API Key 作为 Authorization Bearer 发送至 Gemini 供应商 API，不会发送到其他第三方服务器。</p>
+            </div>
+            <div class="form-group">
+                <label for="api-key-input">API Key</label>
+                <input type="password" id="api-key-input" placeholder="sk-...">
+                <div class="error-msg" id="api-key-error">请输入有效的 API Key</div>
+            </div>
+        <div class="form-group">
+            <label for="geminiModelSelect">Gemini 模型</label>
+            <select id="geminiModelSelect">
+                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview（推荐，质量优先）</option>
+                <option value="gemini-3.5-flash">Gemini 3.5 Flash（推荐，最新均衡）</option>
+                <option value="gemini-3-flash-preview">Gemini 3 Flash Preview（速度/成本均衡）</option>
+                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite（低成本）</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro（稳定高质量）</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash（稳定快速）</option>
+                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite（稳定低成本）</option>
+                <option value="ge-2.5-pro">供应商旧别名 ge-2.5-pro（兼容旧配置）</option>
+            </select>
+            <div class="model-helper">三方供应商使用 Gemini 原生路径参数 /v1beta/models/{model}:generateContent。</div>
+        </div>
+            <div class="modal-actions">
+                <button class="btn-ghost" id="btn-cancel-api" type="button">取消</button>
+                <button id="btn-save-api" type="button">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Constants
+        const GEMINI_API_BASE_URL = 'https://api.gpt.ge/v1beta/models';
+        const GEMINI_MODEL_STORAGE_KEY = 'gemini_model_id';
+        const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash';
+        const GEMINI_MODEL_IDS = [
+            'gemini-3.1-pro-preview',
+            'gemini-3.5-flash',
+            'gemini-3-flash-preview',
+            'gemini-3.1-flash-lite',
+            'gemini-2.5-pro',
+            'gemini-2.5-flash',
+            'gemini-2.5-flash-lite',
+            'ge-2.5-pro'
+        ];
+                const FORBIDDEN_KEYS_S1_S2 = [
+            'referencePrompt', 'promptQueue', 'seedancePrompt', 'gptImagePrompt',
+            'videoSegments', 'shots', 'referenceImagePlan', 'imagePrompt', 'videoPrompt',
+            'assetVersions', 'segmentPlan', 'seedancePrompts', 'gptImagePrompts'
+        ];
+        const FORBIDDEN_KEYS_S3 = [
+            'referencePrompt', 'promptQueue', 'seedancePrompt', 'gptImagePrompt',
+            'referenceImagePlan', 'imagePrompt', 'videoPrompt', 'referenceImagePrompt',
+            'seedancePrompts', 'gptImagePrompts', 'generationParams', 'generationParameters',
+            'modelSpecificPrompt', 'promptString', 'finalPrompt', 'realGenerationInstruction'
+        ];
+        const FORBIDDEN_KEYS_S4 = [
+            'prompt', 'prompts', 'gptImagePrompt', 'gptImagePrompts', 'promptQueue',
+            'seedancePrompt', 'seedancePrompts', 'videoPrompt', 'finalPrompt',
+            'modelSpecificPrompt', 'imagePromptText', 'seedance', 'generationParams',
+            'generationParameters'
+        ];
+
+        // State
+        let apiKey = localStorage.getItem('gemini_api_key') || '';
+        let selectedGeminiModel = normalizeGeminiModel(localStorage.getItem(GEMINI_MODEL_STORAGE_KEY));
+        const projectData = {
+            stage1: null,
+            stage2: null,
+            stage3: null,
+            stage4: null,
+            stage5: null,
+            stage6: null
+        };
+
+        // DOM Elements
+        const apiModal = document.getElementById('api-modal');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const geminiModelSelect = document.getElementById('geminiModelSelect');
+        if (geminiModelSelect) geminiModelSelect.value = selectedGeminiModel;
+        const btnApiKey = document.getElementById('btn-api-key');
+        const btnSaveApi = document.getElementById('btn-save-api');
+        const btnCancelApi = document.getElementById('btn-cancel-api');
+        const apiKeyError = document.getElementById('api-key-error');
+
+        // Stage 1 Elements
+        const s1Script = document.getElementById('s1-script');
+        const s1Duration = document.getElementById('s1-duration');
+        const s1Style = document.getElementById('s1-style');
+        const s1Aspect = document.getElementById('s1-aspect');
+        const s1Lang = document.getElementById('s1-lang');
+        const btnRunS1 = document.getElementById('btn-run-s1');
+        const s1Error = document.getElementById('s1-error');
+        const s1OutputSec = document.getElementById('s1-output-sec');
+        const s1Json = document.getElementById('s1-json');
+        const s1Summary = document.getElementById('s1-summary');
+        const btnCopyS1 = document.getElementById('btn-copy-s1');
+        const s1Status = document.getElementById('stage1-status');
+        const s1Card = document.getElementById('stage1-card');
+
+        // Stage 2 Elements
+        const btnRunS2 = document.getElementById('btn-run-s2');
+        const s2Error = document.getElementById('s2-error');
+        const s2OutputSec = document.getElementById('s2-output-sec');
+        const s2Json = document.getElementById('s2-json');
+        const s2Summary = document.getElementById('s2-summary');
+        const btnCopyS2 = document.getElementById('btn-copy-s2');
+        const s2Status = document.getElementById('stage2-status');
+        const s2Card = document.getElementById('stage2-card');
+
+        // Stage 3 Elements
+        const btnRunS3 = document.getElementById('btn-run-s3');
+        const s3Error = document.getElementById('s3-error');
+        const s3OutputSec = document.getElementById('s3-output-sec');
+        const s3Json = document.getElementById('s3-json');
+        const s3Summary = document.getElementById('s3-summary');
+        const btnCopyS3 = document.getElementById('btn-copy-s3');
+        const s3Status = document.getElementById('stage3-status');
+        const s3Card = document.getElementById('stage3-card');
+
+        // Stage 4 Elements
+        const btnRunS4 = document.getElementById('btn-run-s4');
+        const s4Error = document.getElementById('s4-error');
+        const s4OutputSec = document.getElementById('s4-output-sec');
+        const s4Json = document.getElementById('s4-json');
+        const s4Summary = document.getElementById('s4-summary');
+        const btnCopyS4 = document.getElementById('btn-copy-s4');
+        const s4Status = document.getElementById('stage4-status');
+        const s4Card = document.getElementById('stage4-card');
+
+        // Stage 5 Elements
+        const btnRunS5 = document.getElementById('btn-run-s5');
+        const s5Error = document.getElementById('s5-error');
+        const s5Progress = document.getElementById('s5-progress');
+        const s5OutputSec = document.getElementById('s5-output-sec');
+        const s5Json = document.getElementById('s5-json');
+        const s5Summary = document.getElementById('s5-summary');
+        const btnCopyS5 = document.getElementById('btn-copy-s5');
+        const s5Status = document.getElementById('stage5-status');
+        const s5Card = document.getElementById('stage5-card');
+
+        // Stage 6 Elements
+        const s6Manifest = document.getElementById('s6-manifest');
+        const btnRunS6 = document.getElementById('btn-run-s6');
+        const s6Error = document.getElementById('s6-error');
+        const s6Progress = document.getElementById('s6-progress');
+        const s6OutputSec = document.getElementById('s6-output-sec');
+        const s6Json = document.getElementById('s6-json');
+        const s6Summary = document.getElementById('s6-summary');
+        const btnCopyS6 = document.getElementById('btn-copy-s6');
+        const s6Status = document.getElementById('stage6-status');
+        const s6Card = document.getElementById('stage6-card');
+
+        // API Key Management
+        function showApiModal() {
+            apiKeyInput.value = apiKey;
+            geminiModelSelect.value = selectedGeminiModel;
+            apiKeyError.classList.remove('active');
+            apiModal.classList.add('active');
+        }
+
+        function hideApiModal() {
+            apiModal.classList.remove('active');
+        }
+
+        btnApiKey.addEventListener('click', showApiModal);
+        btnCancelApi.addEventListener('click', hideApiModal);
+
+        btnSaveApi.addEventListener('click', () => {
+            const key = apiKeyInput.value.trim();
+            if (!key) {
+                apiKeyError.classList.add('active');
+                return;
+            }
+            apiKey = key;
+            selectedGeminiModel = getSelectedGeminiModel();
+            localStorage.setItem('gemini_api_key', apiKey);
+            localStorage.setItem(GEMINI_MODEL_STORAGE_KEY, selectedGeminiModel);
+            hideApiModal();
+        });
+
+
+        function setStageState(card, status, stateText, stateClass, { locked = false, active = false, done = false } = {}) {
+            card.classList.remove('locked', 'active', 'done');
+            if (locked) card.classList.add('locked');
+            if (active) card.classList.add('active');
+            if (done) card.classList.add('done');
+            status.textContent = stateText;
+            status.className = `status-badge ${stateClass}`;
+        }
+
+        const outputViews = {
+            s1: { summary: s1Summary, json: s1Json },
+            s2: { summary: s2Summary, json: s2Json },
+            s3: { summary: s3Summary, json: s3Json },
+            s4: { summary: s4Summary, json: s4Json },
+            s5: { summary: s5Summary, json: s5Json },
+            s6: { summary: s6Summary, json: s6Json }
+        };
+
+        function createSummaryElement(tag, className = '', text = '') {
+            const element = document.createElement(tag);
+            if (className) element.className = className;
+            if (text !== '') element.textContent = text;
+            return element;
+        }
+
+        function appendStat(grid, label, value) {
+            const stat = createSummaryElement('div', 'summary-stat');
+            stat.appendChild(createSummaryElement('strong', '', String(value ?? 0)));
+            stat.appendChild(createSummaryElement('span', '', label));
+            grid.appendChild(stat);
+        }
+
+        function appendMeta(parent, label, value) {
+            if (value === undefined || value === null || value === '') return;
+            const meta = createSummaryElement('div', 'summary-meta');
+            const strong = createSummaryElement('strong', '', `${label}: `);
+            strong.style.color = 'var(--text-main)';
+            meta.appendChild(strong);
+            meta.appendChild(document.createTextNode(Array.isArray(value) ? value.join(', ') : String(value)));
+            parent.appendChild(meta);
+        }
+
+        function createCopyButton(label, textToCopy) {
+            const button = createSummaryElement('button', 'btn-ghost', label);
+            button.type = 'button';
+            button.addEventListener('click', () => copyTextWithFeedback(button, textToCopy));
+            return button;
+        }
+
+        function copyTextWithFeedback(button, textToCopy) {
+            navigator.clipboard.writeText(textToCopy || '');
+            const originalText = button.textContent;
+            button.textContent = '已复制!';
+            setTimeout(() => button.textContent = originalText, 2000);
+        }
+
+        function createStatGrid(stats) {
+            const grid = createSummaryElement('div', 'summary-grid');
+            stats.forEach(([label, value]) => {
+                appendStat(grid, label, value);
+            });
+            return grid;
+        }
+
+        function createGenericSummary(stageTitle, data, stats) {
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(createStatGrid(stats));
+            const card = createSummaryElement('div', 'summary-card');
+            card.appendChild(createSummaryElement('div', 'summary-card-title', stageTitle));
+            const topArrays = Object.entries(data || {}).filter(([, value]) => Array.isArray(value));
+            if (topArrays.length > 0) {
+                card.appendChild(createSummaryElement('div', 'summary-muted', `包含数组字段：${topArrays.map(([key, value]) => `${key}(${value.length})`).join(' / ')}`));
+            }
+            fragment.appendChild(card);
+            return fragment;
+        }
+
+        function renderStage1Summary(data) {
+            const fragment = createGenericSummary('剧本结构摘要', data, [
+                ['场景', data?.scenes?.length || 0],
+                ['角色', data?.characters?.length || 0],
+                ['道具', data?.props?.length || 0],
+                ['剧情节拍', data?.plotBeats?.length || 0],
+                ['台词/旁白', data?.dialogueNarration?.length || 0]
+            ]);
+            const list = createSummaryElement('div', 'summary-list');
+            (data?.scenes || []).slice(0, 3).forEach(scene => {
+                const card = createSummaryElement('div', 'summary-card');
+                card.appendChild(createSummaryElement('div', 'summary-card-title', scene.sceneId || scene.location || '场景'));
+                appendMeta(card, '地点', scene.location);
+                appendMeta(card, '用途', scene.storyPurpose);
+                list.appendChild(card);
+            });
+            if (list.childNodes.length) fragment.appendChild(list);
+            return fragment;
+        }
+
+        function renderStage2Summary(data) {
+            return createGenericSummary('资产圣经摘要', data, [
+                ['角色资产', data?.characterAssets?.length || 0],
+                ['场景资产', data?.sceneAssets?.length || 0],
+                ['道具资产', data?.propAssets?.length || 0],
+                ['连续性规则', data?.continuityRules?.length || 0]
+            ]);
+        }
+
+        function renderStage3Summary(data) {
+            const fragment = createGenericSummary('视频分段摘要', data, [
+                ['视频段落', data?.segments?.length || 0],
+                ['预计总秒数', data?.segmentPlanMeta?.totalEstimatedDurationSeconds || 0],
+                ['连续性检查', data?.continuityChecks?.length || 0],
+                ['自动决策', data?.autoResolvedDecisions?.length || 0]
+            ]);
+            const list = createSummaryElement('div', 'summary-list');
+            (data?.segments || []).slice(0, 5).forEach(segment => {
+                const card = createSummaryElement('div', 'summary-card');
+                card.appendChild(createSummaryElement('div', 'summary-card-title', `${segment.segmentId || 'segment'} · ${segment.estimatedDurationSeconds || '?'}秒`));
+                appendMeta(card, '目标', segment.narrativeGoal);
+                appendMeta(card, '覆盖节拍', segment.coveredBeatIds);
+                list.appendChild(card);
+            });
+            if (list.childNodes.length) fragment.appendChild(list);
+            return fragment;
+        }
+
+        function renderStage4Summary(data) {
+            const fragment = createGenericSummary('参考图计划摘要', data, [
+                ['资产决策', data?.assetReferenceDecisions?.length || 0],
+                ['需生成参考图', data?.dependencyOrder?.length || 0],
+                ['文本资产', data?.omittedAssets?.length || 0],
+                ['连续性风险', data?.continuityRisks?.length || 0]
+            ]);
+            const list = createSummaryElement('div', 'summary-list');
+            (data?.assetReferenceDecisions || []).slice(0, 6).forEach(decision => {
+                const card = createSummaryElement('div', 'summary-card');
+                card.appendChild(createSummaryElement('div', 'summary-card-title', decision.assetId || 'asset'));
+                appendMeta(card, '方法', decision.recommendedMethod);
+                appendMeta(card, '参考图类型', decision.requiredReferenceTypes);
+                list.appendChild(card);
+            });
+            if (list.childNodes.length) fragment.appendChild(list);
+            return fragment;
+        }
+
+        function renderStage5Summary(data) {
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(createStatGrid([
+                ['图片提示词', data?.promptItems?.length || 0],
+                ['依赖顺序', data?.dependencyOrder?.length || 0],
+                ['文本资产', data?.omittedAssets?.length || 0]
+            ]));
+            const list = createSummaryElement('div', 'summary-list');
+            (data?.promptItems || []).forEach(item => {
+                const card = createSummaryElement('div', 'summary-card');
+                const header = createSummaryElement('div', 'summary-card-header');
+                const titleWrap = createSummaryElement('div');
+                titleWrap.appendChild(createSummaryElement('div', 'summary-card-title', item.queueId || 'queueId 未命名'));
+                titleWrap.appendChild(createSummaryElement('div', 'summary-code', item.referenceTypeId || item.assetId || ''));
+                header.appendChild(titleWrap);
+                header.appendChild(createCopyButton('复制图片提示词', item.promptText || ''));
+                card.appendChild(header);
+                appendMeta(card, 'queueId', item.queueId);
+                appendMeta(card, '参考图 queueId', item.dependsOnQueueIds?.length ? item.dependsOnQueueIds : '无');
+                const prompt = createSummaryElement('div', 'summary-prompt', item.promptText || '未返回 promptText');
+                card.appendChild(prompt);
+                list.appendChild(card);
+            });
+            fragment.appendChild(list);
+            return fragment;
+        }
+
+        function renderStage6Summary(data) {
+            const fragment = document.createDocumentFragment();
+            fragment.appendChild(createStatGrid([
+                ['视频段落', data?.videoPromptItems?.length || 0],
+                ['参考图片', data?.referenceImageManifest?.length || 0],
+                ['文本资产', data?.omittedAssets?.length || 0]
+            ]));
+            const list = createSummaryElement('div', 'summary-list');
+            (data?.videoPromptItems || []).forEach(item => {
+                const card = createSummaryElement('div', 'summary-card');
+                const header = createSummaryElement('div', 'summary-card-header');
+                const titleWrap = createSummaryElement('div');
+                titleWrap.appendChild(createSummaryElement('div', 'summary-card-title', `${item.order || '?'} · ${item.segmentId || 'segment'} · ${item.durationSeconds || '?'}秒`));
+                titleWrap.appendChild(createSummaryElement('div', 'summary-code', (item.coveredBeatIds || []).join(', ')));
+                header.appendChild(titleWrap);
+                header.appendChild(createCopyButton('复制视频提示词', item.seedancePromptText || ''));
+                card.appendChild(header);
+                appendMeta(card, '参考图', (item.referencedImages || []).map(image => `${image.imageHandle || ''} ${image.queueId || ''}`.trim()).filter(Boolean).join(' / ') || '无');
+                if ((item.textOnlyAssets || []).length) appendMeta(card, '文本资产', item.textOnlyAssets.map(asset => asset.assetId).join(', '));
+                card.appendChild(createSummaryElement('div', 'summary-prompt', item.seedancePromptText || '未返回 seedancePromptText'));
+                list.appendChild(card);
+            });
+            fragment.appendChild(list);
+            return fragment;
+        }
+
+        function renderSummaryForStage(stageKey, data) {
+            const renderers = {
+                s1: renderStage1Summary,
+                s2: renderStage2Summary,
+                s3: renderStage3Summary,
+                s4: renderStage4Summary,
+                s5: renderStage5Summary,
+                s6: renderStage6Summary
+            };
+            return (renderers[stageKey] || ((value) => createGenericSummary('输出摘要', value, [])))(data);
+        }
+
+        function renderStageOutput(stageKey, data) {
+            const view = outputViews[stageKey];
+            if (!view) return;
+            view.summary.textContent = '';
+            view.summary.appendChild(renderSummaryForStage(stageKey, data));
+            view.json.textContent = JSON.stringify(data, null, 2);
+        }
+
+        function clearStageOutput(stageKey) {
+            const view = outputViews[stageKey];
+            if (!view) return;
+            view.summary.textContent = '';
+            view.json.textContent = '';
+        }
+
+        function resetStage2({ locked = true } = {}) {
+            projectData.stage2 = null;
+            projectData.stage3 = null;
+            projectData.stage4 = null;
+            projectData.stage5 = null;
+            projectData.stage6 = null;
+            clearStageOutput('s2');
+            s2OutputSec.classList.remove('active');
+            s2Error.classList.remove('active');
+            btnRunS2.disabled = locked;
+            setStageState(s2Card, s2Status, locked ? 'Locked' : 'Ready', locked ? 'status-locked' : 'status-ready', { locked, active: !locked });
+            resetStage3({ locked: true });
+        }
+
+        function resetStage3({ locked = true } = {}) {
+            projectData.stage3 = null;
+            projectData.stage4 = null;
+            projectData.stage5 = null;
+            projectData.stage6 = null;
+            clearStageOutput('s3');
+            s3OutputSec.classList.remove('active');
+            s3Error.classList.remove('active');
+            btnRunS3.disabled = locked;
+            setStageState(s3Card, s3Status, locked ? 'Locked' : 'Ready', locked ? 'status-locked' : 'status-ready', { locked, active: !locked });
+            resetStage4({ locked: true });
+        }
+
+        function resetStage4({ locked = true } = {}) {
+            projectData.stage4 = null;
+            projectData.stage5 = null;
+            projectData.stage6 = null;
+            clearStageOutput('s4');
+            s4OutputSec.classList.remove('active');
+            s4Error.classList.remove('active');
+            btnRunS4.disabled = locked;
+            setStageState(s4Card, s4Status, locked ? 'Locked' : 'Ready', locked ? 'status-locked' : 'status-ready', { locked, active: !locked });
+            resetStage5({ locked: true });
+        }
+
+        function resetStage5({ locked = true } = {}) {
+            projectData.stage5 = null;
+            projectData.stage6 = null;
+            clearStageOutput('s5');
+            s5OutputSec.classList.remove('active');
+            s5Error.classList.remove('active');
+            s5Progress.style.display = 'none';
+            btnRunS5.disabled = locked;
+            setStageState(s5Card, s5Status, locked ? 'Locked' : 'Ready', locked ? 'status-locked' : 'status-ready', { locked, active: !locked });
+            resetStage6({ locked: true });
+        }
+
+        function resetStage6({ locked = true } = {}) {
+            projectData.stage6 = null;
+            clearStageOutput('s6');
+            s6OutputSec.classList.remove('active');
+            s6Error.classList.remove('active');
+            s6Progress.style.display = 'none';
+            if (locked) s6Manifest.value = '';
+            btnRunS6.disabled = locked;
+            setStageState(s6Card, s6Status, locked ? 'Locked' : 'Ready', locked ? 'status-locked' : 'status-ready', { locked, active: !locked });
+        }
+
+        // Utility: Validate JSON shape
+        function validateExactTopLevelKeys(data, allowedKeys) {
+            const actualKeys = Object.keys(data);
+            const missingKeys = allowedKeys.filter(key => !actualKeys.includes(key));
+            const extraKeys = actualKeys.filter(key => !allowedKeys.includes(key));
+
+            if (missingKeys.length > 0) {
+                throw new Error(`JSON 缺少必需的键: ${missingKeys.join(', ')}`);
+            }
+
+            if (extraKeys.length > 0) {
+                throw new Error(`JSON 包含本阶段不允许的顶层键: ${extraKeys.join(', ')}`);
+            }
+        }
+
+        function findForbiddenKey(value, forbiddenList) {
+            if (Array.isArray(value)) {
+                for (const item of value) {
+                    const nested = findForbiddenKey(item, forbiddenList);
+                    if (nested) return nested;
+                }
+                return null;
+            }
+
+            if (!value || typeof value !== 'object') return null;
+
+            for (const key of Object.keys(value)) {
+                const forbidden = forbiddenList.find(term => term.toLowerCase() === key.toLowerCase());
+                if (forbidden) return forbidden;
+
+                const nested = findForbiddenKey(value[key], forbiddenList);
+                if (nested) return nested;
+            }
+
+            return null;
+        }
+
+
+        function requireObject(value, label) {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) {
+                throw new Error(`验证失败: ${label} 必须是对象`);
+            }
+        }
+
+        function requireArray(value, label) {
+            if (!Array.isArray(value)) {
+                throw new Error(`验证失败: ${label} 必须是数组`);
+            }
+        }
+
+        function requireFields(value, fields, label) {
+            const missing = fields.filter(field => !(field in value));
+            if (missing.length > 0) {
+                throw new Error(`验证失败: ${label} 缺少字段 ${missing.join(', ')}`);
+            }
+        }
+
+
+        function getDialogueNarrationText(item) {
+            if (typeof item === 'string') return item.trim();
+            if (!item || typeof item !== 'object') return '';
+            const candidates = [
+                item.text, item.originalText, item.lineText, item.content, item.dialogue,
+                item.narration, item.voiceLine, item.spokenText, item.caption, item.value
+            ];
+            const found = candidates.find(value => typeof value === 'string' && value.trim());
+            return found ? found.trim() : '';
+        }
+
+        function normalizeAudioNeeds(value) {
+            if (typeof value === 'string') return value.trim();
+            if (Array.isArray(value)) {
+                return value.map(item => {
+                    if (typeof item === 'string') return item.trim();
+                    if (item && typeof item === 'object') {
+                        return [item.text, item.description, item.need, item.audio, item.sound].find(part => typeof part === 'string' && part.trim()) || '';
+                    }
+                    return '';
+                }).filter(Boolean).join('；');
+            }
+            if (value && typeof value === 'object') {
+                return Object.values(value).filter(part => typeof part === 'string' && part.trim()).join('；');
+            }
+            return '';
+        }
+
+        function normalizeStage3Output(data) {
+            const normalized = { ...data };
+            normalized.segments = Array.isArray(data.segments) ? data.segments.map(segment => {
+                const next = { ...segment };
+                next.dialogueNarration = Array.isArray(next.dialogueNarration) ? next.dialogueNarration.map(item => {
+                    const text = getDialogueNarrationText(item);
+                    if (typeof item === 'string') {
+                        return { type: 'narration', speaker: '旁白', text };
+                    }
+                    return {
+                        ...item,
+                        type: item?.type || (item?.speaker === '旁白' ? 'narration' : 'dialogue'),
+                        speaker: item?.speaker || item?.characterName || item?.role || '旁白',
+                        text
+                    };
+                }) : [];
+                next.audioNeeds = normalizeAudioNeeds(next.audioNeeds);
+                return next;
+            }) : [];
+            return normalized;
+        }
+
+        function validateStage3Output(data) {
+            requireObject(data.segmentPlanMeta, 'segmentPlanMeta');
+            requireArray(data.segments, 'segments');
+            requireArray(data.continuityChecks, 'continuityChecks');
+            requireArray(data.autoResolvedDecisions, 'autoResolvedDecisions');
+
+            if (data.segments.length === 0) {
+                throw new Error('验证失败: segments 不能为空');
+            }
+
+            data.segments.forEach((segment, index) => {
+                const label = `segments[${index}]`;
+                requireObject(segment, label);
+                requireFields(segment, [
+                    'segmentId', 'order', 'estimatedDurationSeconds', 'coveredBeatIds',
+                    'narrativeGoal', 'storyStateStart', 'storyStateEnd', 'appearingAssets',
+                    'shots', 'dialogueNarration', 'audioNeeds', 'assetUsageAnalysis', 'planningNotes'
+                ], label);
+
+                const duration = segment.estimatedDurationSeconds;
+                if (!Number.isFinite(duration) || duration < 5 || duration > 15) {
+                    throw new Error(`验证失败: ${label}.estimatedDurationSeconds 必须是 5-15 秒的数字`);
+                }
+
+                requireArray(segment.coveredBeatIds, `${label}.coveredBeatIds`);
+                requireArray(segment.appearingAssets, `${label}.appearingAssets`);
+                requireArray(segment.shots, `${label}.shots`);
+                requireArray(segment.dialogueNarration, `${label}.dialogueNarration`);
+                if (typeof segment.audioNeeds !== 'string') throw new Error(`验证失败: ${label}.audioNeeds 必须是字符串`);
+
+                segment.dialogueNarration.forEach((dialogue, dialogueIndex) => {
+                    const dialogueLabel = `${label}.dialogueNarration[${dialogueIndex}]`;
+                    requireObject(dialogue, dialogueLabel);
+                    requireFields(dialogue, ['type', 'speaker', 'text'], dialogueLabel);
+                    if (!dialogue.text || typeof dialogue.text !== 'string') {
+                        throw new Error(`验证失败: ${dialogueLabel}.text 必须逐字保存台词/旁白原文`);
+                    }
+                });
+
+                segment.appearingAssets.forEach((asset, assetIndex) => {
+                    const assetLabel = `${label}.appearingAssets[${assetIndex}]`;
+                    requireObject(asset, assetLabel);
+                    requireFields(asset, ['assetId', 'assetType', 'versionId', 'roleInSegment', 'state'], assetLabel);
+                });
+
+                segment.shots.forEach((shot, shotIndex) => {
+                    const shotLabel = `${label}.shots[${shotIndex}]`;
+                    requireObject(shot, shotLabel);
+                    requireFields(shot, [
+                        'shotId', 'order', 'purpose', 'framing', 'cameraMotion', 'action',
+                        'assetVersionIds', 'continuityNotes', 'transitionIn', 'transitionOut'
+                    ], shotLabel);
+                    requireArray(shot.assetVersionIds, `${shotLabel}.assetVersionIds`);
+                });
+            });
+        }
+
+        function containsCharacterBaseSheetLayout(text) {
+            const value = String(text || '');
+            const ratio = /\b2\s*[:：]\s*1\b|two[-\s]?to[-\s]?one|2-to-1|宽高比例\s*2\s*[:：]\s*1/.test(value);
+            const headCloseUp = /head\s+close[-\s]?up|close[-\s]?up\s+(?:head|portrait|face)|bust\s+portrait|identity\s+portrait|大头特写|头部特写|头像特写|面部特写/.test(value);
+            const leftHalf = /left\s+half|left\s+side|左半边|左侧|左边/.test(value);
+            const rightHalf = /right\s+half|right\s+side|右半边|右侧|右边/.test(value);
+            const grid = /\b2\s*x\s*2\b|two[-\s]?by[-\s]?two|four[-\s]?panel|four[-\s]?grid|四宫格|四格/.test(value);
+            const fullBody = /full[-\s]?body|head[-\s]?to[-\s]?toe|全身/.test(value);
+            const front = /\bfront(?:al)?(?:\s+view)?\b|正面|正视|前视|前/.test(value);
+            const left = /\bleft(?:\s+side)?(?:\s+view)?\b|left\s+profile|左侧|左视|左/.test(value);
+            const back = /\bback(?:\s+view)?\b|\brear(?:\s+view)?\b|背面|背视|后视|后/.test(value);
+            const right = /\bright(?:\s+side)?(?:\s+view)?\b|right\s+profile|右侧|右视|右/.test(value);
+            const neutralStanding = /neutral\s+standing|standing\s+pose|neutral\s+pose|自然站姿|中性站姿/.test(value);
+            const consistentIdentity = /same\s+(?:face|identity)|same\s+face|same\s+hairstyle|same\s+body\s+proportions|same\s+clothing|consistent\s+(?:face|identity|hairstyle|body|clothing|accessories)|同一五官|同一发型|同一体型|同一服装|身份一致/.test(value);
+            return ratio && headCloseUp && leftHalf && rightHalf && grid && fullBody && front && left && back && right && neutralStanding && consistentIdentity;
+        }
+
+        function containsSceneEstablishingCoverage(text) {
+            const value = String(text || '');
+            const wide = /\bwide(?:\s+angle)?\b|establishing\s+shot|wide\s+establishing|广角|远景|大全景/.test(value);
+            const empty = /empty\s+(?:scene|location|environment)|no\s+(?:characters|people|crowd)|without\s+(?:characters|people)|空镜|无人|无角色/.test(value);
+            return wide && empty;
+        }
+
+        function containsPropSixGridCoverage(text) {
+            const value = String(text || '');
+            const grid = /\b2\s*x\s*3\b|\b3\s*x\s*2\b|six[-\s]?panel|six[-\s]?grid|六宫格|六格/.test(value);
+            const top = /\btop(?:\s+view)?\b|俯视|顶视|上视|上/.test(value);
+            const bottom = /\bbottom(?:\s+view)?\b|仰视|底视|下视|下/.test(value);
+            const left = /\bleft(?:\s+side)?(?:\s+view)?\b|左侧|左视|左/.test(value);
+            const right = /\bright(?:\s+side)?(?:\s+view)?\b|右侧|右视|右/.test(value);
+            const front = /\bfront(?:\s+view)?\b|正面|正视|前视|前/.test(value);
+            const back = /\bback(?:\s+view)?\b|\brear(?:\s+view)?\b|背面|背视|后视/.test(value);
+            return grid && top && bottom && left && right && front && back;
+        }
+
+        function containsPropCloseupStudioCoverage(text) {
+            const value = String(text || '');
+            const single = /\bsingle\b|\bone\b|单个|单张|一张/.test(value);
+            const closeup = /close[-\s]?up|closeup|macro|detail\s+shot|特写|近景|微距/i.test(value);
+            const prop = /\bprop\b|object|item|artifact|product|道具|物品|器物/i.test(value);
+            const reference = /reference|sheet|visual\s+anchor|设定|参考/i.test(value);
+            const studio = /solid[-\s]?colo(?:u)?r|plain\s+(?:background|backdrop)|single[-\s]?colo(?:u)?r|flat\s+(?:background|backdrop)|studio\s+(?:background|backdrop)|pure\s+white|neutral\s+(?:background|backdrop)|neutral\s+gray|black\s+(?:background|backdrop)|dark\s+(?:background|backdrop)|纯色|纯白|中性背景|摄影棚背景|单色背景/i.test(value);
+            const sixGrid = /six[-\s]?grid|six[-\s]?panel|6[-\s]?grid|六宫格|六格/i.test(value);
+            return single && closeup && prop && reference && studio && !sixGrid;
+        }
+
+        function getCanonicalReferenceImageTypes() {
+            return [
+                {
+                    typeId: 'character_base_sheet',
+                    label: '角色基础设定图',
+                    targetAssetTypes: ['character'],
+                    purpose: '为跨镜头复用的主要视觉角色建立身份锚点。表情变化写入视频提示词，不单独生成表情图。',
+                    visualRequirements: '一张 2:1 宽图，左半边为角色大头特写 / head close-up / identity portrait，右半边为 2x2 四宫格，包含全身 front view、left side view、back view、right side view，纯白或中性背景。',
+                    coverageRequirements: [
+                        '必须明确宽高比例 2:1',
+                        '左半边必须是角色大头特写 / head close-up / identity portrait',
+                        '右半边必须是 2x2 四宫格 / four-grid',
+                        '四宫格必须包含全身 front view、left side view、back view、right side view',
+                        '所有视图必须保持同一五官、发型、体型、服装、颜色和配饰',
+                        '必须使用纯色摄影棚背景，背景颜色应服务于道具轮廓、透明度和发光效果的可读性',
+                        '不得为表情变化另建 character_expression_sheet'
+                    ],
+                    downstreamUse: '作为该角色后续所有视频镜头的主身份锚点；情绪和表演由 Stage 6 文本描述。'
+                },
+                {
+                    typeId: 'character_group_reference',
+                    label: '背景群体风格参考图',
+                    targetAssetTypes: ['character', 'group'],
+                    purpose: '为不单独追踪身份的背景群体固定时代服饰与群体风格。',
+                    visualRequirements: '纯白或中性背景上的全身群体排列，体现年龄、性别、阶层和服饰差异，不要求逐个角色多视图。',
+                    coverageRequirements: [
+                        '必须展示群体全身或大半身',
+                        '必须体现时代和阶层服饰特征',
+                        '成员之间必须有自然差异',
+                        '不得为背景群众生成单独身份设定图'
+                    ],
+                    downstreamUse: '作为背景群众的风格锚点，具体表情和站位由视频提示词描述。'
+                },
+                {
+                    typeId: 'scene_establishing_reference',
+                    label: '场景广角空镜参考图',
+                    targetAssetTypes: ['scene'],
+                    purpose: '固定主要地点环境、建筑风格、固定物体和整体氛围。',
+                    visualRequirements: 'wide-angle empty establishing shot / 广角空镜，展示地点环境，无角色、无人群遮挡场景。',
+                    coverageRequirements: [
+                        '必须是 wide-angle / 广角 / 远景',
+                        '必须是 empty establishing shot / 空镜',
+                        '必须无角色、无人群遮挡场景',
+                        '必须清楚展示地点环境、建筑/摊位/固定物体和时代画风',
+                        '不得额外生成 scene_layout_reference；空间动线由 Stage 6 文本描述'
+                    ],
+                    downstreamUse: '作为该场景后续图像和视频生成的环境视觉锚点。'
+                },
+                {
+                    typeId: 'prop_multiview_reference',
+                    label: '核心复杂道具多视图参考图',
+                    targetAssetTypes: ['prop'],
+                    purpose: '为多次出现、被频繁交互、形体复杂且影响剧情理解的核心道具建立结构锚点。',
+                    visualRequirements: 'six-grid / 六宫格参考图，纯白或中性背景，包含 top view、bottom view、left view、right view、front view、back view。',
+                    coverageRequirements: [
+                        '必须是 six-grid / 六宫格结构',
+                        '必须包含 top view / 上视图',
+                        '必须包含 bottom view / 下视图',
+                        '必须包含 left view / 左侧视图',
+                        '必须包含 right view / 右侧视图',
+                        '必须包含 front view / 前视图',
+                        '必须包含 back view / 后视图',
+                        '必须使用纯白或中性背景',
+                        '必须保持材质和状态细节稳定',
+                        '不得额外生成 prop_material_detail_reference 或 relationship_scale_reference'
+                    ],
+                    downstreamUse: '作为核心复杂道具后续镜头的基础视觉锚点。'
+                },
+                {
+                    typeId: 'prop_closeup_reference',
+                    label: '小型核心道具特写参考图',
+                    targetAssetTypes: ['prop'],
+                    purpose: '为小型但剧情关键且有近景/特写的道具建立简洁外观锚点。',
+                    visualRequirements: '单张纯色摄影棚背景道具特写参考图，展示整体轮廓、材质、颜色和尺度感；背景颜色应服务于道具可读性，不要求六视图。',
+                    coverageRequirements: [
+                        '必须是单个道具的清晰特写',
+                        '必须使用纯白或中性背景',
+                        '必须描述材质、颜色、形状和尺度感',
+                        '不得使用六宫格，除非道具形体复杂且会多角度交互'
+                    ],
+                    downstreamUse: '作为小型核心道具在视频特写中的外观锚点。'
+                }
+            ];
+        }
+
+
+        function normalizeStage4RecommendedMethod(method, requiredReferenceTypes) {
+            const allowedMethods = new Set(['reuse', 'textToImage', 'imageToImage', 'edit', 'mixed', 'noReference']);
+            if (allowedMethods.has(method)) return method;
+
+            const normalized = String(method || '').trim().toLowerCase();
+            const compact = normalized.replace(/[^a-z0-9]/g, '');
+            const hasReferences = Array.isArray(requiredReferenceTypes) && requiredReferenceTypes.length > 0;
+
+            if (!normalized) return hasReferences ? 'textToImage' : 'noReference';
+            if (['noreference', 'none', 'skip', 'skipped', 'omit', 'omitted', 'textonly', 'noimage', 'notneeded'].includes(compact)) return 'noReference';
+            if (['reuse', 'reused', 'existing', 'existingreference', 'existingimage'].includes(compact)) return 'reuse';
+            if (['imagetimage', 'imagetoimage', 'image2image', 'i2i'].includes(compact)) return 'imageToImage';
+            if (['edit', 'edited', 'inpaint', 'outpaint', 'retouch'].includes(compact)) return 'edit';
+            if (['mixed', 'hybrid', 'combination', 'combined'].includes(compact)) return 'mixed';
+            if ([
+                'texttoimage', 'text2image', 't2i', 'generate', 'generated', 'create', 'createimage',
+                'newimage', 'newreference', 'referenceimage', 'reference', 'generateimage', 'generatereference',
+                'promptimage', 'gptimage', 'baseimage', 'basegeneration'
+            ].includes(compact)) return hasReferences ? 'textToImage' : 'noReference';
+
+            return hasReferences ? 'textToImage' : 'noReference';
+        }
+
+        function normalizeStage4Output(data, stage3) {
+            const canonicalTypes = getCanonicalReferenceImageTypes();
+            const canonicalIds = new Set(canonicalTypes.map(type => type.typeId));
+            const normalized = {
+                referencePlanMeta: data.referencePlanMeta || {},
+                assetReferenceDecisions: Array.isArray(data.assetReferenceDecisions) ? data.assetReferenceDecisions : [],
+                referenceImageTypes: canonicalTypes,
+                dependencyOrder: Array.isArray(data.dependencyOrder) ? data.dependencyOrder : [],
+                continuityRisks: Array.isArray(data.continuityRisks) ? data.continuityRisks : [],
+                omittedAssets: Array.isArray(data.omittedAssets) ? data.omittedAssets : [],
+                autoResolvedDecisions: Array.isArray(data.autoResolvedDecisions) ? data.autoResolvedDecisions : []
+            };
+
+            const segmentUsage = new Map();
+            (stage3.segments || []).forEach(segment => {
+                (segment.appearingAssets || []).forEach(asset => {
+                    if (!segmentUsage.has(asset.assetId)) segmentUsage.set(asset.assetId, new Set());
+                    segmentUsage.get(asset.assetId).add(segment.segmentId);
+                });
+            });
+
+            normalized.assetReferenceDecisions = normalized.assetReferenceDecisions.map((decision, index) => {
+                const next = { ...decision };
+                next.assetId = next.assetId || next.stableId || next.sourceAssetId || `unknown_asset_${index + 1}`;
+                next.assetType = next.assetType || 'other';
+                next.sourceAssetId = next.sourceAssetId || next.assetId;
+                const rawRecommendedMethod = next.recommendedMethod;
+                next.requiredReferenceTypes = Array.isArray(next.requiredReferenceTypes)
+                    ? next.requiredReferenceTypes.filter(typeId => canonicalIds.has(typeId))
+                    : [];
+                next.recommendedMethod = normalizeStage4RecommendedMethod(rawRecommendedMethod, next.requiredReferenceTypes);
+                next.dependencies = Array.isArray(next.dependencies) ? next.dependencies : [];
+                next.usedInSegments = Array.isArray(next.usedInSegments)
+                    ? next.usedInSegments
+                    : Array.from(segmentUsage.get(next.assetId) || []);
+                next.rationale = next.rationale || '由 Stage 4 自动补齐：该资产需要明确参考图决策。';
+                next.reusePolicy = next.reusePolicy || '按该资产参考图覆盖范围复用；未生成参考图的资产由 Stage 6 文本描述。';
+                next.automaticDecisionNotes = next.automaticDecisionNotes || next.reviewNotes || '由 Stage 4 自动决策，无需人工复核。';
+
+                const isNarrator = next.assetId === 'char_narrator';
+                const isVisualCharacter = next.assetType === 'character' && !isNarrator;
+                const isTrackedCharacter = isVisualCharacter && !next.requiredReferenceTypes.includes('character_group_reference');
+                const isVisualScene = next.assetType === 'scene';
+                const shouldGenerate = next.recommendedMethod !== 'noReference' && next.requiredReferenceTypes.length > 0;
+
+                if (isVisualCharacter && shouldGenerate && isTrackedCharacter && !next.requiredReferenceTypes.includes('character_base_sheet')) {
+                    next.requiredReferenceTypes.unshift('character_base_sheet');
+                }
+                if (isVisualScene && shouldGenerate && !next.requiredReferenceTypes.includes('scene_establishing_reference')) {
+                    next.requiredReferenceTypes.unshift('scene_establishing_reference');
+                }
+                if (next.requiredReferenceTypes.length === 0) {
+                    next.recommendedMethod = 'noReference';
+                }
+                delete next.reviewNotes;
+                return next;
+            });
+
+            const omittedByAssetId = new Map(normalized.omittedAssets.map(item => [item.assetId, item]));
+            normalized.assetReferenceDecisions.forEach(decision => {
+                if (decision.recommendedMethod !== 'noReference') return;
+                if (!omittedByAssetId.has(decision.assetId)) {
+                    omittedByAssetId.set(decision.assetId, {
+                        assetId: decision.assetId,
+                        assetType: decision.assetType,
+                        usedInSegments: decision.usedInSegments || [],
+                        omissionReason: decision.rationale || '自动判断无需单独生成参考图。',
+                        textPromptInstruction: `${decision.assetId} 不生成独立参考图；在 Stage 6 视频提示词中用文字描述其外观、动作和出现方式。`
+                    });
+                }
+            });
+            normalized.omittedAssets = Array.from(omittedByAssetId.values());
+
+            if (normalized.dependencyOrder.length === 0) {
+                normalized.dependencyOrder = normalized.assetReferenceDecisions
+                    .filter(decision => decision.recommendedMethod !== 'noReference')
+                    .map((decision, index) => ({
+                        order: index + 1,
+                        assetId: decision.assetId,
+                        dependsOn: Array.isArray(decision.dependencies) ? decision.dependencies : [],
+                        reason: '由 Stage 4 自动补齐的最小参考图依赖顺序。'
+                    }));
+            }
+            return normalized;
+        }
+
+        function validateStage4Output(data) {
+            requireObject(data.referencePlanMeta, 'referencePlanMeta');
+            requireArray(data.assetReferenceDecisions, 'assetReferenceDecisions');
+            requireArray(data.referenceImageTypes, 'referenceImageTypes');
+            requireArray(data.dependencyOrder, 'dependencyOrder');
+            requireArray(data.continuityRisks, 'continuityRisks');
+            requireArray(data.omittedAssets, 'omittedAssets');
+            requireArray(data.autoResolvedDecisions, 'autoResolvedDecisions');
+
+            if (data.assetReferenceDecisions.length === 0) {
+                throw new Error('验证失败: assetReferenceDecisions 不能为空');
+            }
+
+            const canonicalIds = new Set(getCanonicalReferenceImageTypes().map(type => type.typeId));
+            const forbiddenTypes = new Set(['character_expression_sheet', 'prop_material_detail_reference', 'scene_layout_reference', 'relationship_scale_reference']);
+
+            data.assetReferenceDecisions.forEach((decision, index) => {
+                const label = `assetReferenceDecisions[${index}]`;
+                requireObject(decision, label);
+                requireFields(decision, [
+                    'assetId', 'assetType', 'sourceAssetId', 'recommendedMethod',
+                    'requiredReferenceTypes', 'rationale', 'dependencies',
+                    'usedInSegments', 'reusePolicy', 'automaticDecisionNotes'
+                ], label);
+                const allowedMethods = ['reuse', 'textToImage', 'imageToImage', 'edit', 'mixed', 'noReference'];
+                if (!allowedMethods.includes(decision.recommendedMethod)) {
+                    throw new Error(`验证失败: ${label}.recommendedMethod 必须是 ${allowedMethods.join(', ')} 之一`);
+                }
+                requireArray(decision.requiredReferenceTypes, `${label}.requiredReferenceTypes`);
+                requireArray(decision.dependencies, `${label}.dependencies`);
+                requireArray(decision.usedInSegments, `${label}.usedInSegments`);
+                decision.requiredReferenceTypes.forEach(typeId => {
+                    if (forbiddenTypes.has(typeId)) throw new Error(`验证失败: ${label}.requiredReferenceTypes 不允许生成补充图类型 ${typeId}`);
+                    if (!canonicalIds.has(typeId)) throw new Error(`验证失败: ${label}.requiredReferenceTypes 包含未知参考图类型 ${typeId}`);
+                });
+
+                if (decision.recommendedMethod === 'noReference' && decision.requiredReferenceTypes.length > 0) {
+                    throw new Error(`验证失败: ${label} 使用 noReference 时 requiredReferenceTypes 必须为空`);
+                }
+                if (decision.recommendedMethod !== 'noReference' && decision.assetType === 'character') {
+                    const hasBaseSheet = decision.requiredReferenceTypes.includes('character_base_sheet');
+                    const hasGroupSheet = decision.requiredReferenceTypes.includes('character_group_reference');
+                    if (!hasBaseSheet && !hasGroupSheet) {
+                        throw new Error(`验证失败: ${label}.requiredReferenceTypes 中视觉角色必须包含 character_base_sheet 或 character_group_reference`);
+                    }
+                }
+                if (decision.recommendedMethod !== 'noReference' && decision.assetType === 'scene') {
+                    if (!decision.requiredReferenceTypes.includes('scene_establishing_reference')) {
+                        throw new Error(`验证失败: ${label}.requiredReferenceTypes 中视觉场景必须包含 scene_establishing_reference`);
+                    }
+                }
+                if (decision.recommendedMethod !== 'noReference' && decision.assetType === 'prop') {
+                    const hasPropReference = decision.requiredReferenceTypes.includes('prop_multiview_reference') || decision.requiredReferenceTypes.includes('prop_closeup_reference');
+                    if (!hasPropReference) throw new Error(`验证失败: ${label}.requiredReferenceTypes 中核心道具必须包含 prop_multiview_reference 或 prop_closeup_reference`);
+                }
+            });
+
+            data.omittedAssets.forEach((item, index) => {
+                const label = `omittedAssets[${index}]`;
+                requireObject(item, label);
+                requireFields(item, ['assetId', 'assetType', 'usedInSegments', 'omissionReason', 'textPromptInstruction'], label);
+                requireArray(item.usedInSegments, `${label}.usedInSegments`);
+            });
+
+            const typesById = new Map(data.referenceImageTypes.map(type => [type.typeId, type]));
+            getCanonicalReferenceImageTypes().forEach(type => {
+                if (!typesById.has(type.typeId)) throw new Error(`验证失败: referenceImageTypes 缺少 ${type.typeId}`);
+            });
+
+            data.referenceImageTypes.forEach((type, index) => {
+                const label = `referenceImageTypes[${index}]`;
+                requireObject(type, label);
+                requireFields(type, ['typeId', 'label', 'targetAssetTypes', 'purpose', 'visualRequirements', 'coverageRequirements', 'downstreamUse'], label);
+                if (!canonicalIds.has(type.typeId)) throw new Error(`验证失败: referenceImageTypes 不允许新增非最小参考图类型 ${type.typeId}`);
+                requireArray(type.targetAssetTypes, `${label}.targetAssetTypes`);
+                requireArray(type.coverageRequirements, `${label}.coverageRequirements`);
+            });
+        }
+
+                // Utility: Call Gemini API
+        function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function normalizeGeminiModel(modelId) {
+            return GEMINI_MODEL_IDS.includes(modelId) ? modelId : DEFAULT_GEMINI_MODEL;
+        }
+
+                function getSelectedGeminiModel() {
+            return normalizeGeminiModel(geminiModelSelect?.value || selectedGeminiModel);
+        }
+
+        function buildGeminiEndpoint() {
+            return `${GEMINI_API_BASE_URL}/${encodeURIComponent(getSelectedGeminiModel())}:generateContent`;
+        }
+
+        function shouldRetryGeminiStatus(status) {
+            return status === 429 || status >= 500;
+        }
+
+        async function readGeminiErrorMessage(response) {
+            const text = await response.text();
+            if (!text) return '';
+            try {
+                const data = JSON.parse(text);
+                return data.error?.message || text;
+            } catch (err) {
+                return text;
+            }
+        }
+
+        async function callGemini(promptText) {
+            if (!apiKey) {
+                showApiModal();
+                throw new Error('请先设置 API Key');
+            }
+
+            const maxAttempts = 5;
+            let lastError = null;
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                let response;
+                try {
+                    response = await fetch(buildGeminiEndpoint(), {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
+                        body: JSON.stringify({
+                            contents: [{
+                                role: 'user',
+                                parts: [{ text: promptText }]
+                            }],
+                            generationConfig: {
+                                responseMimeType: "application/json"
+                            }
+                        })
+                    });
+                } catch (err) {
+                    lastError = new Error(`API 网络请求失败: ${err.message}`);
+                    if (attempt < maxAttempts) {
+                        await wait(1200 * attempt);
+                        continue;
+                    }
+                    throw lastError;
+                }
+
+                if (!response.ok) {
+                    const errorMessage = await readGeminiErrorMessage(response);
+                    lastError = new Error(`API 请求失败: ${response.status} ${errorMessage}`);
+                    if (attempt < maxAttempts && shouldRetryGeminiStatus(response.status)) {
+                        await wait(1200 * attempt);
+                        continue;
+                    }
+                    throw lastError;
+                }
+
+                const data = await response.json();
+                if (!data.candidates || data.candidates.length === 0) {
+                    throw new Error('API 返回为空');
+                }
+
+                return data.candidates[0].content.parts[0].text;
+            }
+
+            throw lastError || new Error('API 请求失败');
+        }
+
+        // Stage 1 Logic
+        btnRunS1.addEventListener('click', async () => {
+            const script = s1Script.value.trim();
+            if (!script) {
+                s1Error.textContent = '请输入剧本内容';
+                s1Error.classList.add('active');
+                return;
+            }
+
+            s1Error.classList.remove('active');
+            projectData.stage1 = null;
+            s1OutputSec.classList.remove('active');
+            clearStageOutput('s1');
+            s1Card.classList.remove('done');
+            resetStage2({ locked: true });
+            btnRunS1.disabled = true;
+            btnRunS1.classList.add('loading');
+            s1Status.textContent = 'Running';
+            s1Status.className = 'status-badge status-ready';
+
+            const prompt = `You are an expert short-drama script parser.
+Your goal is to turn the raw script into structured narrative facts for downstream asset bible creation and production planning. You are NOT deciding production assets, camera angles, or generating image/video prompts yet. Focus purely on extracting the narrative truth of the story.
+
+### Analysis Procedure
+1. Read the whole script to understand the overarching story.
+2. Identify scene units (time/location boundaries).
+3. Extract characters (including their emotional arcs and story functions).
+4. Extract props (especially those that drive the plot or change ownership).
+5. Decompose the story into sequential plot beats (causality and narrative function).
+6. Assign dialogue and narration to specific beats and characters.
+7. Resolve ambiguities internally and record concise automatic assumptions; never stop for human questions.
+
+### Field Semantics & Structure
+You MUST output ONLY valid JSON containing exactly these top-level keys:
+- scenes: Array of scene objects. Include stable IDs, time/location, visualStyleCues, and storyPurpose.
+- characters: Array of character objects. Include stable IDs, firstAppearanceBeatId, narrativeFunction, emotionalState/arc, and relatedSceneIds.
+- props: Array of prop objects. Include stable IDs, storyFunction, relatedCharacterIds, and relatedSceneIds.
+- plotBeats: Array of beat objects. Include stable IDs, causality (how it connects to previous/next beats), relatedSceneIds, relatedCharacterIds, and relatedPropIds.
+- dialogueNarration: Array of dialogue objects. Link them to specific beat IDs and character IDs.
+- autoAssumptions: Array of strings recording automatic assumptions used to resolve script ambiguities. Use an empty array if none were needed.
+
+### Question Handling & Language
+- All natural-language fields MUST use ${s1Lang.value} as the output language.
+- Automation is ALWAYS ON: resolve ambiguities internally with reasonable assumptions grounded in the script. Record those assumptions in 'autoAssumptions'. Do not ask the user questions and do not emit blocking issues.
+
+### Boundary Constraints
+Do not generate asset versions, image/video prompts, or production plans. Output only the narrative facts in JSON format.
+
+Script:
+${script}
+
+Target Duration Range: ${s1Duration.value}
+Visual Style: ${s1Style.value}
+Aspect Ratio: ${s1Aspect.value}
+Language: ${s1Lang.value}
+`;
+
+            try {
+                const resultText = await callGemini(prompt);
+
+                // Validate JSON
+                let parsedJson;
+                try {
+                    parsedJson = JSON.parse(resultText);
+                } catch {
+                    throw new Error('API 返回的不是有效的 JSON 格式');
+                }
+
+                validateExactTopLevelKeys(parsedJson, ['scenes', 'characters', 'props', 'plotBeats', 'dialogueNarration', 'autoAssumptions']);
+
+                const forbiddenKey = findForbiddenKey(parsedJson, FORBIDDEN_KEYS_S1_S2);
+                if (forbiddenKey) {
+                    throw new Error(`验证失败: 输出了被禁止的内容键 (${forbiddenKey})`);
+                }
+
+                // Success
+                projectData.stage1 = parsedJson;
+                renderStageOutput('s1', parsedJson);
+                s1OutputSec.classList.add('active');
+
+                s1Status.textContent = 'Done';
+                s1Status.className = 'status-badge status-done';
+                s1Card.classList.add('done');
+                s1Card.classList.remove('active');
+
+                // Unlock Stage 2 with a clean downstream state
+                resetStage2({ locked: false });
+
+            } catch (err) {
+                s1Error.textContent = err.message;
+                s1Error.classList.add('active');
+                s1Status.textContent = 'Error';
+                s1Status.className = 'status-badge status-error';
+            } finally {
+                btnRunS1.disabled = false;
+                btnRunS1.classList.remove('loading');
+            }
+        });
+
+        btnCopyS1.addEventListener('click', () => {
+            navigator.clipboard.writeText(JSON.stringify(projectData.stage1, null, 2));
+            const originalText = btnCopyS1.textContent;
+            btnCopyS1.textContent = '已复制!';
+            setTimeout(() => btnCopyS1.textContent = originalText, 2000);
+        });
+
+        // Stage 2 Logic
+        btnRunS2.addEventListener('click', async () => {
+            if (!projectData.stage1) {
+                s2Error.textContent = '请先完成阶段 1';
+                s2Error.classList.add('active');
+                return;
+            }
+
+            s2Error.classList.remove('active');
+            projectData.stage2 = null;
+            s2OutputSec.classList.remove('active');
+            clearStageOutput('s2');
+            s2Card.classList.remove('done');
+            resetStage3({ locked: true });
+            btnRunS2.disabled = true;
+            btnRunS2.classList.add('loading');
+            s2Status.textContent = 'Running';
+            s2Status.className = 'status-badge status-ready';
+
+            const prompt = `You are an expert short-drama asset bible creator.
+Your goal is to convert Stage 1 narrative facts into an asset canon and continuity contract. You are defining the persistent identities and necessary variations of characters, scenes, and props across the story. You are NOT writing image/video prompt text or generation queues.
+
+### Analysis Procedure
+1. Normalize stable asset IDs from the Stage 1 narrative facts.
+2. Define the base version (the default state) for each character, scene, and prop.
+3. Identify necessary story-driven variation versions (e.g., a character gets injured, a prop breaks, a scene changes from day to night).
+4. Separate persistent changes (which require a new variation version) from temporary expressions/actions (which do not).
+5. Write explicit continuity rules to prevent hallucination or inconsistency across shots.
+6. Resolve asset-continuity ambiguities automatically and record concise automatic decisions.
+
+### Field Semantics & Structure
+You MUST output ONLY valid JSON containing exactly these top-level keys:
+- assetBibleMeta: Object containing overall style and continuity guidelines.
+- characterAssets: Array of character asset objects. Include stableId, sourceCharacterId, identityInvariants (what never changes), baseVersion, and variationVersions (include triggerBeatIds, changedAttributes, and persistence).
+- sceneAssets: Array of scene asset objects. Include stableId, sourceSceneIds, identityInvariants, baseVersion, and variationVersions.
+- propAssets: Array of prop asset objects. Include stableId, sourcePropId, identityInvariants, baseVersion, variationVersions, and ownershipOrLocationFlow.
+- continuityRules: Array of strings defining strict rules and continuityRisks (e.g., "The necklace must always be silver, never gold").
+- autoResolvedDecisions: Array of strings recording automatic asset-continuity decisions and assumptions. Use an empty array if none were needed.
+
+### Question Handling & Language
+- All natural-language fields MUST use ${s1Lang.value} as the output language.
+- Automation is ALWAYS ON: resolve asset-continuity ambiguities with reasonable assumptions and record them in 'autoResolvedDecisions'. Do not ask the user questions and do not emit blocking issues.
+
+### Boundary Constraints
+Do not generate image/video prompts, shot plans, or generation queues. Output only the asset continuity contract in JSON format.
+
+Parsed Script Data:
+${JSON.stringify(projectData.stage1)}
+`;
+
+            try {
+                const resultText = await callGemini(prompt);
+
+                // Validate JSON
+                let parsedJson;
+                try {
+                    parsedJson = JSON.parse(resultText);
+                } catch {
+                    throw new Error('API 返回的不是有效的 JSON 格式');
+                }
+
+                validateExactTopLevelKeys(parsedJson, ['assetBibleMeta', 'characterAssets', 'sceneAssets', 'propAssets', 'continuityRules', 'autoResolvedDecisions']);
+
+                const forbiddenKey = findForbiddenKey(parsedJson, FORBIDDEN_KEYS_S1_S2);
+                if (forbiddenKey) {
+                    throw new Error(`验证失败: 输出了被禁止的内容键 (${forbiddenKey})`);
+                }
+
+                // Success
+                projectData.stage2 = parsedJson;
+                renderStageOutput('s2', parsedJson);
+                s2OutputSec.classList.add('active');
+
+                s2Status.textContent = 'Done';
+                s2Status.className = 'status-badge status-done';
+                s2Card.classList.add('done');
+                s2Card.classList.remove('active');
+
+                // Unlock Stage 3 with a clean downstream state
+                resetStage3({ locked: false });
+
+            } catch (err) {
+                s2Error.textContent = err.message;
+                s2Error.classList.add('active');
+                s2Status.textContent = 'Error';
+                s2Status.className = 'status-badge status-error';
+            } finally {
+                btnRunS2.disabled = false;
+                btnRunS2.classList.remove('loading');
+            }
+        });
+
+        btnCopyS2.addEventListener('click', () => {
+            navigator.clipboard.writeText(JSON.stringify(projectData.stage2, null, 2));
+            const originalText = btnCopyS2.textContent;
+            btnCopyS2.textContent = '已复制!';
+            setTimeout(() => btnCopyS2.textContent = originalText, 2000);
+        });
+
+        // Stage 3 Logic
+        btnRunS3.addEventListener('click', async () => {
+            if (!projectData.stage1 || !projectData.stage2) {
+                s3Error.textContent = '请先完成阶段 1 和阶段 2';
+                s3Error.classList.add('active');
+                return;
+            }
+
+            s3Error.classList.remove('active');
+            projectData.stage3 = null;
+            s3OutputSec.classList.remove('active');
+            clearStageOutput('s3');
+            s3Card.classList.remove('done');
+            resetStage4({ locked: true });
+            btnRunS3.disabled = true;
+            btnRunS3.classList.add('loading');
+            s3Status.textContent = 'Running';
+            s3Status.className = 'status-badge status-ready';
+
+            const prompt = `You are an expert short-drama video segment planner.
+Your goal is to convert Stage 1 narrative facts and Stage 2 asset bible into 5-15 second video segment planning units. You are NOT writing final video prompts, reference image generation plans, GPT-image-2 prompts, or Seedance final prompts.
+
+### Analysis Procedure
+1. Map the plot beats from Stage 1 into video segments.
+2. Keep each segment between 5-15 seconds.
+3. Define the narrative goal for each segment.
+4. Define the shots inside each segment.
+5. Assign appearing assets and their specific versions from Stage 2.
+6. Carry over dialogue and narration. Design audio needs with NO background music, score, soundtrack, BGM, melody, or musical cues; allow environment sound, foley, action sound effects, magical sound effects, crowd noise, voice, dialogue/narration, room tone, and intentional silence.
+7. Identify continuity checks and automatic planning decisions; never emit upstream issues that require human handling.
+
+### Field Semantics & Structure
+You MUST output ONLY valid JSON containing exactly these top-level keys:
+- segmentPlanMeta: Object containing totalEstimatedDurationSeconds, targetDurationRange, pacingStrategy, segmentCount, outputLanguage.
+- segments: Array of segment objects. Include segmentId, order, estimatedDurationSeconds, coveredBeatIds, narrativeGoal, storyStateStart, storyStateEnd, appearingAssets, shots, dialogueNarration, audioNeeds, assetUsageAnalysis, planningNotes.
+  - appearingAssets: Array of objects with assetId, assetType, versionId, roleInSegment, state.
+  - shots: Array of objects with shotId, order, purpose, framing, cameraMotion, action, assetVersionIds, continuityNotes, transitionIn, transitionOut.
+  - dialogueNarration: Array of objects with exactly type, speaker, text. type must be dialogue or narration; speaker is the speaking character name or 旁白; text must preserve the original dialogue/narration wording exactly, without paraphrase. Use an empty array if the segment has no spoken line or narration.
+  - audioNeeds: A single Chinese string describing this segment's sound requirements without any background music, score, soundtrack, BGM, melody, or musical cues. Allow only environment sound, foley, action sound effects, magical sound effects, crowd noise, voice, dialogue/narration, room tone, and intentional silence. Do not output an object or array.
+- continuityChecks: Array of strings for continuity checks.
+- autoResolvedDecisions: Array of strings recording automatic segment-planning assumptions and decisions.
+
+### Question Handling & Language
+- All natural-language fields MUST use ${s1Lang.value} as the output language.
+- Automation is ALWAYS ON: resolve segment planning ambiguities with reasonable assumptions and record them in 'autoResolvedDecisions'. Do not ask the user questions and do not emit blocking issues.
+
+### Boundary Constraints
+Do not output reference image generation plans, GPT-image-2 prompts, Seedance final prompts, model-specific prompt strings, generation params, or real generation instructions. Output only the segment plan in JSON format.
+
+Parsed Script Data (Stage 1):
+${JSON.stringify(projectData.stage1)}
+
+Asset Bible (Stage 2):
+${JSON.stringify(projectData.stage2)}
+`;
+
+            try {
+                const resultText = await callGemini(prompt);
+
+                // Validate JSON
+                let parsedJson;
+                try {
+                    parsedJson = JSON.parse(resultText);
+                } catch {
+                    throw new Error('API 返回的不是有效的 JSON 格式');
+                }
+
+                parsedJson = normalizeStage3Output(parsedJson);
+                validateExactTopLevelKeys(parsedJson, ['segmentPlanMeta', 'segments', 'continuityChecks', 'autoResolvedDecisions']);
+                validateStage3Output(parsedJson);
+
+                const forbiddenKey = findForbiddenKey(parsedJson, FORBIDDEN_KEYS_S3);
+                if (forbiddenKey) {
+                    throw new Error(`验证失败: 输出了被禁止的内容键 (${forbiddenKey})`);
+                }
+
+                // Success
+                projectData.stage3 = parsedJson;
+                renderStageOutput('s3', parsedJson);
+                s3OutputSec.classList.add('active');
+
+                s3Status.textContent = 'Done';
+                s3Status.className = 'status-badge status-done';
+                s3Card.classList.add('done');
+                s3Card.classList.remove('active');
+
+                // Unlock Stage 4
+                resetStage4({ locked: false });
+
+            } catch (err) {
+                s3Error.textContent = err.message;
+                s3Error.classList.add('active');
+                s3Status.textContent = 'Error';
+                s3Status.className = 'status-badge status-error';
+            } finally {
+                btnRunS3.disabled = false;
+                btnRunS3.classList.remove('loading');
+            }
+        });
+
+        btnCopyS3.addEventListener('click', () => {
+            navigator.clipboard.writeText(JSON.stringify(projectData.stage3, null, 2));
+            const originalText = btnCopyS3.textContent;
+            btnCopyS3.textContent = '已复制!';
+            setTimeout(() => btnCopyS3.textContent = originalText, 2000);
+        });
+
+        // Stage 4 Logic
+        btnRunS4.addEventListener('click', async () => {
+            if (!projectData.stage2 || !projectData.stage3) {
+                s4Error.textContent = '请先完成阶段 2 和阶段 3';
+                s4Error.classList.add('active');
+                return;
+            }
+
+            s4Error.classList.remove('active');
+            projectData.stage4 = null;
+            s4OutputSec.classList.remove('active');
+            clearStageOutput('s4');
+            s4Card.classList.remove('done');
+            btnRunS4.disabled = true;
+            btnRunS4.classList.add('loading');
+            s4Status.textContent = 'Running';
+            s4Status.className = 'status-badge status-ready';
+
+            const prompt = `You are an expert short-drama reference image selector for a fully automatic AIGC production pipeline.
+
+Your current task is Stage 4: Minimal Reference Image Selection Plan. This is a planning stage only. You are not generating images, not writing final GPT-Image-2 prompt text, not writing Seedance prompts, and not creating executable generation parameters.
+
+### Core Objective
+Select the smallest necessary reference image set that allows Stage 5 to write image prompts and Stage 6 to write stable video prompts. Do NOT over-generate references. Every selected reference image must be justified by close-up use, repeated cross-segment reuse, complex visual structure, or plot-critical visual identity.
+
+### Mandatory Automation Rules
+1. Automation is ALWAYS ON. Resolve ambiguities with reasonable assumptions and record them in autoResolvedDecisions. Do not ask the user questions and do not emit blocking upstream issues.
+2. Character expressions MUST NOT become separate images. Use character_base_sheet for tracked characters; write emotional performance and expression changes into Stage 6 video prompt text.
+3. Non-core, non-recurring, non-close-up props MUST NOT get reference images. Describe them in Stage 6 prompt text through omittedAssets.textPromptInstruction.
+4. One-off props such as money/currency should normally be noReference unless they are a hero prop or require repeated stable close-ups.
+5. Use prop_multiview_reference only for complex hero props that appear repeatedly, are handled from multiple angles, or whose shape/details drive the story.
+6. Use prop_closeup_reference for small but plot-critical props that appear in close-up and need a stable look, but do not require six views.
+7. Do NOT create character_expression_sheet, prop_material_detail_reference, scene_layout_reference, or relationship_scale_reference. Material, expression, layout, and scale notes must be folded into base references or Stage 6 text.
+8. The total selected reference images should normally stay under 6 for a short single-location story unless the script genuinely has more independent hero assets.
+9. If a visible asset is omitted, include it in omittedAssets with a textPromptInstruction that Stage 6 can copy into the Seedance prompt.
+
+### Allowed Reference Types
+You may only use these typeIds:
+${JSON.stringify(getCanonicalReferenceImageTypes(), null, 2)}
+
+### Allowed recommendedMethod Values
+For assetReferenceDecisions[].recommendedMethod, use exactly one of these strings:
+- textToImage: Stage 5 should create a new GPT-Image-2 prompt from text. Use this for all selected fresh references in the current static workflow.
+- noReference: Do not generate a reference image; Stage 6 must carry the visual instruction as text through omittedAssets.
+- reuse: Reuse an existing reference image from another asset decision, only when sourceAssetId clearly points to that reusable source.
+- imageToImage: Reserved for a future workflow with an existing source image. Do not use unless the input explicitly provides one.
+- edit: Reserved for editing an existing source image. Do not use in this text-only workflow.
+- mixed: Reserved for cases combining multiple source images or edit modes. Avoid it unless absolutely necessary.
+
+In this pipeline, most generated references should use textToImage, and omitted assets should use noReference. Do not invent values such as generate, create, newReference, referenceImage, textOnly, skip, omit, or auto.
+
+### Output Structure
+You MUST output ONLY valid JSON with exactly these top-level keys:
+- referencePlanMeta: Object containing planSummary, outputLanguage, planningScope, assetCoverageSummary, stageBoundary, referenceBudget.
+- assetReferenceDecisions: Array. Each object must include assetId, assetType, sourceAssetId, recommendedMethod, requiredReferenceTypes, rationale, dependencies, usedInSegments, reusePolicy, automaticDecisionNotes.
+- referenceImageTypes: Array. Use the allowed reference types above only; do not invent extra typeIds.
+- dependencyOrder: Array. Only include assets that actually generate references.
+- continuityRisks: Array of Chinese strings describing risks that were handled by automatic decisions.
+- omittedAssets: Array. Each object must include assetId, assetType, usedInSegments, omissionReason, textPromptInstruction.
+- autoResolvedDecisions: Array of Chinese strings recording assumptions and automatic decisions.
+
+### Selection Policy Examples
+- Main recurring character in close-up: character_base_sheet.
+- Background crowd not individually tracked: character_group_reference.
+- Main reusable location: scene_establishing_reference.
+- Ornate box handled repeatedly from multiple angles: prop_multiview_reference.
+- Pearl-like small plot-critical object in close-up: prop_closeup_reference.
+- Money shown once as payment: noReference, add omittedAssets text instruction.
+- Narrator voice only: noReference, add omittedAssets or autoResolvedDecisions if needed.
+
+### Input Data
+Stage 2 Asset Bible:
+${JSON.stringify(projectData.stage2, null, 2)}
+
+Stage 3 Video Segment Plan:
+${JSON.stringify(projectData.stage3, null, 2)}
+
+Remember: output exactly one JSON object. Do not include Markdown fences, explanatory prose outside JSON, final GPT-Image-2 prompts, Seedance prompts, model-specific prompt strings, generation parameters, or real generation instructions.`;
+
+            try {
+                const resultText = await callGemini(prompt);
+                let parsedJson;
+                try {
+                    parsedJson = JSON.parse(resultText);
+                } catch {
+                    throw new Error('API 返回的不是有效的 JSON 格式');
+                }
+
+                parsedJson = normalizeStage4Output(parsedJson, projectData.stage3);
+                validateExactTopLevelKeys(parsedJson, ['referencePlanMeta', 'assetReferenceDecisions', 'referenceImageTypes', 'dependencyOrder', 'continuityRisks', 'omittedAssets', 'autoResolvedDecisions']);
+                validateStage4Output(parsedJson);
+
+                const forbiddenKey = findForbiddenKey(parsedJson, FORBIDDEN_KEYS_S4);
+                if (forbiddenKey) {
+                    throw new Error(`验证失败: 输出了被禁止的内容键 (${forbiddenKey})`);
+                }
+
+                // Success
+                projectData.stage4 = parsedJson;
+                renderStageOutput('s4', parsedJson);
+                s4OutputSec.classList.add('active');
+
+                s4Status.textContent = 'Done';
+                s4Status.className = 'status-badge status-done';
+                s4Card.classList.add('done');
+                s4Card.classList.remove('active');
+
+                // Unlock Stage 5
+                resetStage5({ locked: false });
+
+            } catch (err) {
+                s4Error.textContent = err.message;
+                s4Error.classList.add('active');
+                s4Status.textContent = 'Error';
+                s4Status.className = 'status-badge status-error';
+            } finally {
+                btnRunS4.disabled = false;
+                btnRunS4.classList.remove('loading');
+            }
+        });
+
+        btnCopyS4.addEventListener('click', () => {
+            navigator.clipboard.writeText(JSON.stringify(projectData.stage4, null, 2));
+            const originalText = btnCopyS4.textContent;
+            btnCopyS4.textContent = '已复制!';
+            setTimeout(() => btnCopyS4.textContent = originalText, 2000);
+        });
+
+        // Stage 5 Logic
+        function findStage2AssetFacts(stage2, decision) {
+            const assetId = decision.assetId;
+            const sourceAssetId = decision.sourceAssetId;
+
+            if (decision.assetType === 'character') {
+                return stage2.characterAssets?.find(asset => asset.stableId === assetId || asset.sourceCharacterId === sourceAssetId) || null;
+            }
+
+            if (decision.assetType === 'scene') {
+                return stage2.sceneAssets?.find(asset => asset.stableId === assetId || asset.sourceSceneIds?.includes(sourceAssetId)) || null;
+            }
+
+            if (decision.assetType === 'prop') {
+                return stage2.propAssets?.find(asset => asset.stableId === assetId || asset.sourcePropId === sourceAssetId) || null;
+            }
+
+            return {
+                stableId: assetId,
+                sourceAssetId,
+                identityInvariants: decision.rationale,
+                baseVersion: { description: decision.automaticDecisionNotes || decision.rationale }
+            };
+        }
+
+        function getReferenceTargetAspectRatio(typeId, fallbackAspectRatio) {
+            if (typeId === 'character_base_sheet') return '2:1';
+            if (typeId === 'scene_establishing_reference') return '16:9 wide establishing reference';
+            if (typeId === 'prop_multiview_reference') return '3:2 or 2:3 six-grid reference sheet';
+            if (typeId === 'prop_closeup_reference') return '1:1 or 4:5 single prop close-up studio reference';
+            return fallbackAspectRatio;
+        }
+
+        function getReferenceBackgroundPolicy(typeId) {
+            if (typeId === 'scene_establishing_reference') {
+                return 'scene-appropriate environment background, wide empty shot with no characters';
+            }
+            if (typeId.includes('character') || typeId.includes('prop') || typeId.includes('relationship')) {
+                if (typeId === 'prop_closeup_reference') return 'solid-color studio background chosen for prop readability';
+                return 'pure white or neutral background';
+            }
+            return 'scene appropriate';
+        }
+
+        function makeQueueId(assetId, typeId) {
+            return `img_${assetId.replace(/[^a-zA-Z0-9_]/g, '_')}_${typeId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+        }
+
+        function getBaseReferenceTypeForAssetType(assetType) {
+            if (assetType === 'character') return 'character_base_sheet';
+            if (assetType === 'scene') return 'scene_establishing_reference';
+            if (assetType === 'prop') return 'prop_multiview_reference';
+            return '';
+        }
+
+        function getSameAssetDependencyType() {
+            return '';
+        }
+
+        function buildDependsOnQueueIds(decision, typeId, requiredTypes, decisionsByAssetId) {
+            const dependsOn = new Set();
+            const sameAssetDependencyType = getSameAssetDependencyType(typeId);
+            if (sameAssetDependencyType && requiredTypes.includes(sameAssetDependencyType)) {
+                dependsOn.add(makeQueueId(decision.assetId, sameAssetDependencyType));
+            }
+
+            (decision.dependencies || []).forEach(assetId => {
+                const dependencyDecision = decisionsByAssetId.get(assetId);
+                if (!dependencyDecision || dependencyDecision.recommendedMethod === 'noReference') return;
+                const baseType = getBaseReferenceTypeForAssetType(dependencyDecision.assetType);
+                const dependencyRequiredTypes = dependencyDecision.requiredReferenceTypes || [];
+                if (baseType && dependencyRequiredTypes.includes(baseType)) {
+                    dependsOn.add(makeQueueId(assetId, baseType));
+                }
+            });
+            return Array.from(dependsOn);
+        }
+
+        function buildStage5PromptQueueSkeleton(stage2, stage4, aspectRatio) {
+            const skeleton = [];
+            const decisions = stage4.assetReferenceDecisions || [];
+            const decisionsByAssetId = new Map(decisions.map(decision => [decision.assetId, decision]));
+            const refTypes = stage4.referenceImageTypes || [];
+            const globalStyle = stage2.assetBibleMeta?.overallStyle || '';
+            const continuityGuidelines = stage2.assetBibleMeta?.continuityGuidelines || '';
+
+            decisions.forEach(decision => {
+                if (decision.recommendedMethod === 'noReference') return;
+
+                const assetId = decision.assetId;
+                const assetFacts = findStage2AssetFacts(stage2, decision);
+                const requiredTypes = decision.requiredReferenceTypes || [];
+
+                requiredTypes.forEach((typeId, typeIndex) => {
+                    const queueId = makeQueueId(assetId, typeId);
+                    const typeDef = refTypes.find(t => t.typeId === typeId) || {};
+
+                    skeleton.push({
+                        queueId,
+                        assetId,
+                        assetType: decision.assetType,
+                        sourceAssetId: decision.sourceAssetId,
+                        referenceTypeId: typeId,
+                        referenceTypeOrder: typeIndex + 1,
+                        recommendedMethod: decision.recommendedMethod,
+                        assetFacts,
+                        decisionRationale: decision.rationale,
+                        typeDefinition: typeDef,
+                        dependencies: decision.dependencies || [],
+                        dependsOnQueueIds: buildDependsOnQueueIds(decision, typeId, requiredTypes, decisionsByAssetId),
+                        usedInSegments: decision.usedInSegments || [],
+                        reusePolicy: decision.reusePolicy,
+                        automaticDecisionNotes: decision.automaticDecisionNotes,
+                        globalStyle,
+                        continuityGuidelines,
+                        targetAspectRatio: getReferenceTargetAspectRatio(typeId, aspectRatio),
+                        backgroundPolicy: getReferenceBackgroundPolicy(typeId)
+                    });
+                });
+            });
+
+            // Sort using stage4.dependencyOrder where possible
+            const orderMap = new Map();
+            if (stage4.dependencyOrder) {
+                stage4.dependencyOrder.forEach(dep => {
+                    orderMap.set(dep.assetId, dep.order);
+                });
+            }
+
+            skeleton.sort((a, b) => {
+                const orderA = orderMap.has(a.assetId) ? orderMap.get(a.assetId) : 999;
+                const orderB = orderMap.has(b.assetId) ? orderMap.get(b.assetId) : 999;
+                if (orderA !== orderB) return orderA - orderB;
+                if (a.assetId === b.assetId) return a.referenceTypeOrder - b.referenceTypeOrder;
+                return a.queueId.localeCompare(b.queueId);
+            });
+
+            return skeleton;
+        }
+
+        function batchPromptSkeletonItems(items, batchSize) {
+            const batches = [];
+            for (let i = 0; i < items.length; i += batchSize) {
+                batches.push(items.slice(i, i + batchSize));
+            }
+            return batches;
+        }
+
+        function buildStage5PromptBatchPrompt(batch, allSkeleton, stage2, stage4, batchInfo) {
+            const globalContext = {
+                totalPromptItems: allSkeleton.length,
+                globalStyle: stage2.assetBibleMeta?.overallStyle || '',
+                continuityGuidelines: stage2.assetBibleMeta?.continuityGuidelines || '',
+                referencePlanSummary: stage4.referencePlanMeta?.planSummary || '',
+                omittedAssets: stage4.omittedAssets || [],
+                autoResolvedDecisions: stage4.autoResolvedDecisions || []
+            };
+
+            return `You are an expert AI image prompt engineer specializing in GPT-Image-2.
+Your task is to generate high-quality, deterministic still-image prompts for the selected minimal reference image set of a short drama production pipeline.
+
+### GPT-Image-2 Prompt Guidance (STRICTLY ENFORCED)
+1. **Still Images Only**: Prompts are for STILL IMAGES ONLY. NO video instructions, NO duration/fps, NO camera movement, NO timeline, NO Seedance language.
+2. **Language**: Write the final \`promptText\` in English. Metadata and quality checks can be in Chinese.
+3. **Minimal Set Discipline**: Only write prompts for the batch items supplied by Stage 4. Do not invent expression sheets, material detail sheets, scene layout sheets, relationship scale sheets, or prompts for omitted assets.
+4. **Fixed Ordering**: Use this ordering for \`promptText\`: intended reference type -> visual style/context -> subject -> identity/details -> composition/viewpoint/framing -> lighting/material/texture -> constraints.
+5. **Character Base Sheets**: For \`character_base_sheet\`, promptText MUST request one 2:1 wide character reference sheet on a pure white background. The left half MUST be a large head close-up / identity portrait. The right half MUST be a 2x2 grid of full-body orthographic views: front, left side, back, and right side. Preserve the same face, hairstyle, body proportions, clothing, colors, and accessories across all four full-body panels.
+6. **Character Group References**: For \`character_group_reference\`, promptText should request a full-body or mostly full-body lineup on a pure white or neutral background, with clear era/costume variety. Do not create individual turnarounds.
+7. **Scene Establishing References**: For \`scene_establishing_reference\`, promptText MUST request a wide-angle empty establishing shot of the location with no characters, no people, and no crowd blocking the scene.
+8. **Prop Multiview References**: For \`prop_multiview_reference\`, promptText MUST request a six-grid prop reference sheet on a pure white background with six labeled views: top, bottom, left, right, front, and back.
+9. **Prop Close-up References**: For \`prop_closeup_reference\`, promptText MUST request one clean single prop close-up studio reference on a solid-color studio background. Choose the solid background color that best preserves the prop's silhouette, transparency, glow, material, color, surface details, and scale cues. Do not force white when white would reduce readability for transparent, translucent, glowing, reflective, or pale props. Do not use a six-grid unless the type is prop_multiview_reference.
+10. **Negative Constraints**: Include no watermark, no extra text unless requested, no logos/trademarks, no modern clothing/buildings, no video instructions.
+11. **No Filler**: Avoid generic quality filler and contradictory/cinematic final-frame language for reference sheets.
+
+### Global Context
+${JSON.stringify(globalContext, null, 2)}
+
+### Batch Information
+Processing batch ${batchInfo.current} of ${batchInfo.total}.
+Batch contains ${batch.length} items.
+
+### Full Queue IDs for Dependency Awareness
+${JSON.stringify(allSkeleton.map(item => ({ queueId: item.queueId, assetId: item.assetId, referenceTypeId: item.referenceTypeId, dependencies: item.dependencies, dependsOnQueueIds: item.dependsOnQueueIds })), null, 2)}
+
+### Batch Items to Process
+${JSON.stringify(batch, null, 2)}
+
+### Mandatory Validator Phrases
+The page will reject your JSON unless the relevant promptText contains these exact concepts in English.
+- If referenceTypeId is 'character_base_sheet', include this complete sentence near the start of promptText: "Create one 2:1 wide character reference sheet on a pure white background: the left half is a large head close-up identity portrait, and the right half is a 2x2 grid of full-body orthographic views labeled front view, left side view, back view, and right side view. Use neutral standing poses and preserve the same face, same hairstyle, same body proportions, same clothing, colors, and accessories across every panel."
+- If referenceTypeId is 'scene_establishing_reference', include this complete sentence near the start of promptText: "Create a wide-angle empty establishing shot of the location, with no characters, no people, and no crowd blocking the scene."
+- If referenceTypeId is 'prop_multiview_reference', include this complete sentence near the start of promptText: "Create a six-grid prop reference sheet on a pure white background, with six labeled views: top view, bottom view, left side view, right side view, front view, and back view."
+- If referenceTypeId is 'prop_closeup_reference', state near the start that it is a single prop close-up studio reference on a solid-color studio background. The background may be pure white, neutral gray, black, or another single flat studio color if that improves the readability of translucent, glowing, reflective, or pale props.
+- If dependsOnQueueIds is not empty, dependencyNotes MUST literally include every queueId from dependsOnQueueIds.
+
+### Output Format
+You MUST output ONLY valid JSON containing exactly this structure:
+{
+  "batchId": ${batchInfo.current},
+  "items": [
+    {
+      "queueId": "MUST match the queueId from the input batch exactly",
+      "promptText": "The English GPT-Image-2 prompt following the guidance above",
+      "negativeConstraints": ["English negative constraint 1", "English negative constraint 2"],
+      "autoQualityChecks": ["Chinese automatic quality check 1", "Chinese automatic quality check 2"],
+      "dependencyNotes": "A single Chinese string on how to use dependencies, if any; never output an array or object"
+    }
+  ]
+}
+
+Remember: output exactly one JSON object. Do not include Markdown fences or explanatory prose outside JSON.`;
+        }
+
+
+        function stringifyModelText(value) {
+            if (typeof value === 'string') return value.trim();
+            if (Array.isArray(value)) {
+                return value.map(item => stringifyModelText(item)).filter(Boolean).join('；');
+            }
+            if (value && typeof value === 'object') {
+                return Object.values(value).map(item => stringifyModelText(item)).filter(Boolean).join('；');
+            }
+            return '';
+        }
+
+        function normalizeStringArray(value) {
+            if (Array.isArray(value)) return value.map(item => stringifyModelText(item)).filter(Boolean);
+            if (typeof value === 'string' && value.trim()) return [value.trim()];
+            return [];
+        }
+
+        function normalizeStage5BatchOutput(batchJson) {
+            return {
+                ...batchJson,
+                items: Array.isArray(batchJson.items) ? batchJson.items.map(item => ({
+                    ...item,
+                    negativeConstraints: normalizeStringArray(item.negativeConstraints),
+                    autoQualityChecks: normalizeStringArray(item.autoQualityChecks),
+                    dependencyNotes: stringifyModelText(item.dependencyNotes)
+                })) : []
+            };
+        }
+
+        function validateStage5PromptCoverage(item, skeletonItem) {
+            const referenceTypeId = skeletonItem?.referenceTypeId || item.referenceTypeId;
+            const promptText = item.promptText || '';
+            const dependsOnQueueIds = skeletonItem?.dependsOnQueueIds || item.dependsOnQueueIds || [];
+
+            requireArray(dependsOnQueueIds, `${item.queueId}.dependsOnQueueIds`);
+            if (dependsOnQueueIds.includes(item.queueId)) {
+                throw new Error(`dependsOnQueueIds 不能包含自身 queueId: ${item.queueId}`);
+            }
+
+            if (referenceTypeId === 'character_base_sheet' && !containsCharacterBaseSheetLayout(promptText)) {
+                throw new Error(`character_base_sheet promptText 必须包含 2:1、左半边大头特写、右半边 2x2 四宫格全身前/左/后/右视图: ${item.queueId}`);
+            }
+
+            if (referenceTypeId === 'scene_establishing_reference' && !containsSceneEstablishingCoverage(promptText)) {
+                throw new Error(`scene_establishing_reference promptText 必须包含广角空镜且无角色干扰: ${item.queueId}`);
+            }
+
+            if (referenceTypeId === 'prop_multiview_reference' && !containsPropSixGridCoverage(promptText)) {
+                throw new Error(`prop_multiview_reference promptText 必须包含六宫格和上/下/左/右/前/后视图: ${item.queueId}`);
+            }
+
+            if (referenceTypeId === 'prop_closeup_reference' && !containsPropCloseupStudioCoverage(promptText)) {
+                throw new Error(`prop_closeup_reference promptText 必须包含单个道具、特写、参考图、纯色摄影棚背景，并且不能是六宫格: ${item.queueId}`);
+            }
+
+            if (dependsOnQueueIds.length > 0 && !dependsOnQueueIds.every(queueId => (item.dependencyNotes || '').includes(queueId))) {
+                throw new Error(`dependencyNotes 必须明确提到所有 dependsOnQueueIds: ${item.queueId}`);
+            }
+        }
+
+        function validateStage5BatchOutput(batchJson, batchItems) {
+            if (!batchJson.items || !Array.isArray(batchJson.items)) {
+                throw new Error('Batch output must contain an items array');
+            }
+            if (batchJson.items.length !== batchItems.length) {
+                throw new Error(`Batch output items count (${batchJson.items.length}) does not match input batch size (${batchItems.length})`);
+            }
+
+            const inputQueueIds = new Set(batchItems.map(i => i.queueId));
+            const outputQueueIds = new Set();
+            batchJson.items.forEach(item => {
+                if (!item.queueId || !inputQueueIds.has(item.queueId)) {
+                    throw new Error(`Invalid or missing queueId in batch output: ${item.queueId}`);
+                }
+                if (outputQueueIds.has(item.queueId)) {
+                    throw new Error(`Duplicate queueId in batch output: ${item.queueId}`);
+                }
+                outputQueueIds.add(item.queueId);
+                if (!item.promptText || typeof item.promptText !== 'string') {
+                    throw new Error(`Missing or invalid promptText for queueId: ${item.queueId}`);
+                }
+                if (!Array.isArray(item.negativeConstraints)) {
+                    throw new Error(`negativeConstraints must be an array for queueId: ${item.queueId}`);
+                }
+                if (!Array.isArray(item.autoQualityChecks)) {
+                    throw new Error(`autoQualityChecks must be an array for queueId: ${item.queueId}`);
+                }
+                if (typeof item.dependencyNotes !== 'string') {
+                    throw new Error(`dependencyNotes must be a string for queueId: ${item.queueId}`);
+                }
+
+                const skeletonItem = batchItems.find(batchItem => batchItem.queueId === item.queueId);
+                validateStage5PromptCoverage(item, skeletonItem);
+            });
+
+            batchItems.forEach(item => {
+                if (!outputQueueIds.has(item.queueId)) {
+                    throw new Error(`Batch output missing queueId: ${item.queueId}`);
+                }
+            });
+        }
+
+        function validateStage5Output(data) {
+            validateExactTopLevelKeys(data, ['promptQueueMeta', 'promptQueueSkeleton', 'promptItems', 'dependencyOrder', 'reuseRules', 'omittedAssets', 'autoQualityChecks', 'autoResolvedDecisions']);
+            requireObject(data.promptQueueMeta, 'promptQueueMeta');
+            requireArray(data.promptQueueSkeleton, 'promptQueueSkeleton');
+            requireArray(data.promptItems, 'promptItems');
+            requireArray(data.dependencyOrder, 'dependencyOrder');
+            requireArray(data.reuseRules, 'reuseRules');
+            requireArray(data.omittedAssets, 'omittedAssets');
+            requireArray(data.autoQualityChecks, 'autoQualityChecks');
+            requireArray(data.autoResolvedDecisions, 'autoResolvedDecisions');
+
+            if (data.promptQueueSkeleton.length !== data.promptItems.length) {
+                throw new Error('promptQueueSkeleton 和 promptItems 数量必须一致');
+            }
+
+            const skeletonIds = new Set(data.promptQueueSkeleton.map(item => item.queueId));
+            if (skeletonIds.size !== data.promptQueueSkeleton.length) {
+                throw new Error('promptQueueSkeleton 包含重复 queueId');
+            }
+
+            const skeletonMap = new Map(data.promptQueueSkeleton.map(item => [item.queueId, item]));
+            const promptItemIds = new Set();
+            data.promptItems.forEach(item => {
+                if (!skeletonIds.has(item.queueId)) {
+                    throw new Error(`promptItems 包含未知 queueId: ${item.queueId}`);
+                }
+                if (promptItemIds.has(item.queueId)) {
+                    throw new Error(`promptItems 包含重复 queueId: ${item.queueId}`);
+                }
+                promptItemIds.add(item.queueId);
+                if (!item.promptText || typeof item.promptText !== 'string') {
+                    throw new Error(`promptItems 缺少 promptText: ${item.queueId}`);
+                }
+                requireArray(item.negativeConstraints, `${item.queueId}.negativeConstraints`);
+                requireArray(item.autoQualityChecks, `${item.queueId}.autoQualityChecks`);
+                requireArray(item.dependsOnQueueIds, `${item.queueId}.dependsOnQueueIds`);
+                validateStage5PromptCoverage(item, skeletonMap.get(item.queueId));
+            });
+        }
+
+
+        function buildStage5RepairPrompt(originalPrompt, validationError, invalidOutput) {
+            const invalidJson = typeof invalidOutput === 'string' ? invalidOutput : JSON.stringify(invalidOutput, null, 2);
+            return `${originalPrompt}
+
+### 自动校验失败，需要你修复本批次输出
+上一轮 Stage 5 JSON 没有通过页面自动校验，错误如下：
+${validationError}
+
+请基于同一个 batch 完整修复 JSON。必须只输出一个合法 JSON 对象，不要输出 Markdown，不要解释。
+重点要求：
+- 保留顶层结构：{"batchId": number, "items": [...]}。
+- items 数量、queueId 必须与输入 batch 完全一致，不要新增、删除或改名。
+- promptText 必须是英文静态图提示词，不要写视频、镜头运动、时长、API 参数。
+- character_base_sheet 必须包含 2:1、左半边大头特写、右半边 2x2 四宫格全身 front/left/back/right。
+- scene_establishing_reference 必须是 wide-angle empty establishing shot，且无角色/无人群遮挡。
+- prop_multiview_reference 必须是 six-grid 并包含 top/bottom/left/right/front/back 六视图。
+- prop_closeup_reference 必须是 single prop close-up studio reference，使用 solid-color studio background；背景色可以是纯白、中性灰、黑色或其他单一纯色，只要能清楚展示透明、发光、反光或浅色道具；不能写六宫格。
+- dependencyNotes 如果 dependsOnQueueIds 不为空，必须逐字包含每个依赖 queueId。
+
+上一轮未通过的 JSON：
+${invalidJson}`;
+        }
+
+        async function runStage5BatchWithRepair(prompt, batch, batchNumber, onProgress) {
+            let currentPrompt = prompt;
+            let lastError = null;
+            const maxAttempts = 3;
+
+            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                if (attempt > 1 && onProgress) {
+                    onProgress({ current: batchNumber, total: null, repairAttempt: attempt - 1 });
+                }
+
+                const resultText = await callGemini(currentPrompt);
+                let parsedJson;
+                try {
+                    parsedJson = JSON.parse(resultText);
+                } catch (err) {
+                    lastError = new Error(`批次 ${batchNumber} API 返回的不是有效的 JSON 格式`);
+                    if (attempt >= maxAttempts) throw lastError;
+                    currentPrompt = buildStage5RepairPrompt(prompt, lastError.message, resultText);
+                    continue;
+                }
+
+                parsedJson = normalizeStage5BatchOutput(parsedJson);
+                try {
+                    validateStage5BatchOutput(parsedJson, batch);
+                    return parsedJson;
+                } catch (err) {
+                    lastError = err;
+                    if (attempt >= maxAttempts) throw err;
+                    currentPrompt = buildStage5RepairPrompt(prompt, err.message, parsedJson);
+                }
+            }
+
+            throw lastError || new Error(`批次 ${batchNumber} 自动修复失败`);
+        }
+
+        async function runStage5Pipeline({ stage2, stage4, aspectRatio = '9:16', onProgress = null }) {
+            if (!stage2 || !stage4) {
+                throw new Error('Stage 5 requires stage2 and stage4 data');
+            }
+
+            const skeleton = buildStage5PromptQueueSkeleton(stage2, stage4, aspectRatio);
+            if (skeleton.length === 0) {
+                throw new Error('生成的提示词队列骨架为空，请检查阶段 4 的输出。');
+            }
+
+            const batchSize = 3;
+            const batches = batchPromptSkeletonItems(skeleton, batchSize);
+            const finalPromptItems = [];
+
+            for (let i = 0; i < batches.length; i++) {
+                if (onProgress) onProgress({ current: i + 1, total: batches.length });
+                const batch = batches[i];
+                const prompt = buildStage5PromptBatchPrompt(batch, skeleton, stage2, stage4, { current: i + 1, total: batches.length });
+                const parsedJson = await runStage5BatchWithRepair(prompt, batch, i + 1, onProgress);
+                batch.forEach(skeletonItem => {
+                    const resultItem = parsedJson.items.find(item => item.queueId === skeletonItem.queueId);
+                    finalPromptItems.push({
+                        ...skeletonItem,
+                        promptText: resultItem.promptText,
+                        negativeConstraints: resultItem.negativeConstraints,
+                        autoQualityChecks: resultItem.autoQualityChecks,
+                        dependsOnQueueIds: skeletonItem.dependsOnQueueIds || [],
+                        dependencyNotes: resultItem.dependencyNotes
+                    });
+                });
+            }
+
+            const stage5Data = {
+                promptQueueMeta: {
+                    totalItems: finalPromptItems.length,
+                    batchSize: batchSize,
+                    batchCount: batches.length,
+                    aspectRatio: aspectRatio,
+                    generatedAt: new Date().toISOString(),
+                    dependencyDerivation: 'dependsOnQueueIds generated by Stage 5 application code from Stage 4 requiredReferenceTypes and dependencies before Gemini prompt writing'
+                },
+                promptQueueSkeleton: skeleton,
+                promptItems: finalPromptItems,
+                dependencyOrder: stage4.dependencyOrder || [],
+                reuseRules: stage4.assetReferenceDecisions.filter(d => d.reusePolicy).map(d => ({ assetId: d.assetId, reusePolicy: d.reusePolicy })),
+                autoQualityChecks: [
+                    '自动确认所有提示词符合 GPT-Image-2 静态图要求',
+                    '自动确认没有包含视频生成指令',
+                    '自动确认只为 Stage 4 选中的最小参考图生成 prompt',
+                    '自动确认未生成图资产已进入 omittedAssets 并将在 Stage 6 文本描述'
+                ],
+                omittedAssets: stage4.omittedAssets || [],
+                autoResolvedDecisions: stage4.autoResolvedDecisions || []
+            };
+
+            validateStage5Output(stage5Data);
+            return stage5Data;
+        }
+
+        function inferSeedanceUsageRole(item) {
+            if (item.referenceTypeId?.includes('scene')) return 'scene_reference';
+            if (item.referenceTypeId?.includes('prop')) return 'prop_reference';
+            if (item.referenceTypeId?.includes('character')) return 'character_reference';
+            if (item.referenceTypeId?.includes('relationship')) return 'relationship_scale_reference';
+            return 'visual_reference';
+        }
+
+        function buildDefaultReferenceImageManifest(stage5) {
+            const items = stage5?.promptItems || [];
+            return items.map((item, index) => ({
+                queueId: item.queueId,
+                assetId: item.assetId,
+                assetType: item.assetType,
+                referenceTypeId: item.referenceTypeId,
+                displayName: `@图片${index + 1}`,
+                imageSlotNumber: index + 1,
+                imageHandle: `@图片${index + 1}`,
+                sourcePromptQueueId: item.queueId,
+                generatedImageStatus: 'promptPlanned',
+                imageUri: '',
+                usageRole: inferSeedanceUsageRole(item),
+                seedanceUsageNotes: `${item.assetId} 的 ${item.referenceTypeId} 参考图，生成 Seedance 提示词时只作为视觉锚点引用。`,
+                dependsOnQueueIds: item.dependsOnQueueIds || []
+            }));
+        }
+
+        function validateReferenceImageManifest(manifest, stage5) {
+            requireArray(manifest, 'referenceImageManifest');
+            const stage5Ids = new Set((stage5?.promptItems || []).map(item => item.queueId));
+            const seenQueueIds = new Set();
+            const seenSlots = new Set();
+            manifest.forEach((item, index) => {
+                const label = `referenceImageManifest[${index}]`;
+                requireObject(item, label);
+                requireFields(item, [
+                    'queueId', 'assetId', 'assetType', 'referenceTypeId', 'displayName',
+                    'imageSlotNumber', 'imageHandle', 'sourcePromptQueueId', 'generatedImageStatus',
+                    'imageUri', 'usageRole', 'seedanceUsageNotes', 'dependsOnQueueIds'
+                ], label);
+                if (!stage5Ids.has(item.queueId)) throw new Error(`${label}.queueId 不存在于阶段 5: ${item.queueId}`);
+                if (seenQueueIds.has(item.queueId)) throw new Error(`referenceImageManifest 包含重复 queueId: ${item.queueId}`);
+                seenQueueIds.add(item.queueId);
+                if (!Number.isInteger(item.imageSlotNumber) || item.imageSlotNumber < 1) throw new Error(`${label}.imageSlotNumber 必须是正整数`);
+                if (seenSlots.has(item.imageSlotNumber)) throw new Error(`referenceImageManifest 包含重复 imageSlotNumber: ${item.imageSlotNumber}`);
+                seenSlots.add(item.imageSlotNumber);
+                if (item.imageHandle !== `@图片${item.imageSlotNumber}`) throw new Error(`${label}.imageHandle 必须等于 @图片${item.imageSlotNumber}`);
+                requireArray(item.dependsOnQueueIds, `${label}.dependsOnQueueIds`);
+            });
+        }
+
+        function getManifestForAsset(manifest, assetId) {
+            return manifest.filter(item => item.assetId === assetId);
+        }
+
+        function buildSegmentReferenceCandidates(segment, manifest) {
+            const assetIds = new Set((segment.appearingAssets || []).map(asset => asset.assetId));
+            const candidates = [];
+            assetIds.forEach(assetId => {
+                candidates.push(...getManifestForAsset(manifest, assetId));
+            });
+            return candidates.slice(0, 9);
+        }
+
+        function getTextOnlyAssetsForSegment(segment, omittedAssets) {
+            const assetIds = new Set((segment.appearingAssets || []).map(asset => asset.assetId));
+            return (omittedAssets || []).filter(asset => {
+                if (Array.isArray(asset.usedInSegments) && asset.usedInSegments.includes(segment.segmentId)) return true;
+                return assetIds.has(asset.assetId);
+            });
+        }
+
+        function removeAllowedNoMusicPhrases(text) {
+            return String(text || '')
+                .replace(/(?:不得使用|不允许|禁止|无|不使用|不要|没有|避免|去除)\s*(?:任何)?\s*(?:背景音乐|配乐|BGM|bgm|音乐|乐曲|乐声|旋律|音乐性铺底)(?:(?:、|或)(?:背景音乐|配乐|BGM|bgm|音乐|乐曲|乐声|旋律|音乐性铺底))*[^。；;，,]*/gi, '');
+        }
+
+        function containsForbiddenBackgroundMusic(text) {
+            return /(背景音乐|配乐|BGM|bgm|音乐|乐曲|乐声|旋律|score|soundtrack|melody|musical cue)/i.test(removeAllowedNoMusicPhrases(text));
+        }
+
+        function sanitizeAudioNeedsForNoBackgroundMusic(audioNeeds) {
+            const source = normalizeAudioNeeds(audioNeeds);
+            const allowedParts = source
+                .split(/[，。；;、\n]/)
+                .map(part => part.trim())
+                .filter(part => part && !containsForbiddenBackgroundMusic(part));
+            const allowedText = allowedParts.join('，');
+            const policy = '不得使用任何背景音乐、配乐、BGM、旋律或音乐性铺底；允许环境声、动作音效、拟声词、魔法/光效声、人声、台词/旁白、空间回声和必要静默';
+            return allowedText ? `${allowedText}。${policy}。` : `${policy}。`;
+        }
+
+        function buildStage6Prompt(stage3, stage5, referenceImageManifest) {
+            const omittedAssets = stage5.omittedAssets || [];
+            const segmentBriefs = (stage3.segments || []).map(segment => ({
+                ...segment,
+                audioNeedsForSeedance: sanitizeAudioNeedsForNoBackgroundMusic(segment.audioNeeds),
+                referenceImageCandidates: buildSegmentReferenceCandidates(segment, referenceImageManifest),
+                textOnlyAssets: getTextOnlyAssetsForSegment(segment, omittedAssets)
+            }));
+            const stage3ForStage6 = {
+                ...stage3,
+                segments: segmentBriefs.map(segment => {
+                    const { audioNeeds, referenceImageCandidates, textOnlyAssets, ...rest } = segment;
+                    return {
+                        ...rest,
+                        audioNeedsForSeedance: segment.audioNeedsForSeedance
+                    };
+                })
+            };
+            const lumenflowPromptStats = [
+                { slug: 'yusuceshizuixinban', style: '真人写实（通用）', scenes: 10, averageLength: 1368, averageTimeBlocks: 5, notes: '强对话、雨夜动作戏，所有 prompt 都有左右基线、画面/运镜/声音/台词/其他需求。' },
+                { slug: 'demo111', style: '哥特黏土', scenes: 5, averageLength: 835, averageTimeBlocks: 3, notes: '无对白 TVC，依然逐时间块写画面、运镜、声音和拟声词。' },
+                { slug: 'demo1', style: '日式动画', scenes: 23, averageLength: 1135, averageTimeBlocks: 4.7, notes: '2D 剧情短剧，台词进入台词字段但仍要求无字幕无文字。' },
+                { slug: 'demo1223', style: '真人写实（通用）', scenes: 12, averageLength: 1262, averageTimeBlocks: 4.5, notes: '9:16 真人短剧，移动端构图下仍大量使用画面左侧/右侧和前后景锚点。' }
+            ];
+
+            return `你是专业的短剧 Seedance 2.0 视频提示词导演。你的任务是基于阶段 3 的视频段落计划、阶段 5 的参考图队列和参考图 Manifest，生成可直接复制到即梦 / Seedance 2.0 的完整视频分镜提示词队列。你只写提示词规划 JSON，不生成视频，不调用任何视频 API。
+
+### 输出语言
+- JSON key 使用指定英文 key，不要新增或删除顶层 key。
+- 所有用户可见文案、seedancePromptText、usageInstruction、continuityRules、audioNotes、textOnlyAssets、autoQualityChecks、autoResolvedDecisions 必须使用简体中文。
+- seedanceQueueMeta.outputLanguage 必须是 "zh-CN"。
+
+### Lumenflow 竞品提示词结构分析（必须吸收）
+${JSON.stringify(lumenflowPromptStats, null, 2)}
+
+四个 demo 的共同结构不是剧情摘要，而是可执行的导演分镜：
+1. 固定以“运镜+画面：”开头。
+2. 每段拆成 3-5 个时间块，首个时间块必须逐字使用“[0-3s] 画面：”，后续时间块继续使用“[3-6s]”这种方括号秒数格式。
+3. “画面：”写景别、主体位置、朝向、动作过程、表情微变化、前景/中景/后景、光线、材质和环境细节。
+4. “运镜：”写具体镜头语言，例如固定、Dolly In 前推、Truck 横移、Orbit 环绕、Rack Focus 焦点切换、过肩、浅焦、长焦压缩、镜头微震。
+5. “声音：”写环境声、动作音效、拟声词、人声、台词/旁白、空间回声和必要静默，例如“沙沙沙”“嗒嗒”“啪”“哗啦”；不写任何背景音乐、配乐、BGM、旋律或音乐性铺底。
+6. 多角色场景必须写清“画面左侧/画面右侧/前景/后景/本场左右基线/关系锚定”，避免视频生成时人物站位漂移。
+7. 结尾必须有“其他需求：面部五官清晰稳定不变形，同一角色全程外貌一致，人体/角色结构正常比例自然，动作连续自然不跳帧，无模糊无重影，无字幕无文字，无背景音乐。”
+8. 即使有台词，也把台词当作角色人声和口型表演，不要求画面生成字幕；字幕可在后期剪辑添加。为了画面稳定，本阶段默认“无字幕无文字”。
+
+### Seedance 2.0 执行规则（必须遵守）
+1. 本阶段只规划图片参考和文本提示词，不调用视频 API。
+2. 图片输入最多 9 张，混合输入总上限 12 个文件；每个视频段的 referencedImages 不能超过 9 张。
+3. 生成时长必须是 4-15 秒；使用阶段 3 的 estimatedDurationSeconds，如超出范围则压到 4-15 秒。
+4. 必须用 @图片1、@图片2 这种素材名明确引用每张已选参考图，并把引用写进具体画面或素材锚定句中，不要只放在 referencedImages 数组。
+5. 区分已生成参考图和文本资产：角色图锚定身份/服装/体态，道具图锚定外观/结构/材质，场景图锚定空间/氛围；textOnlyAssets 中的未生成图资产必须用文字写进具体画面。
+6. 必须优先使用阶段 3 的 shots[]：每个 shot 至少转化为一个时间块；不要把 shots 概括成一段“时序故事线”。
+7. 每个时间块必须包含“画面：”“运镜：”“声音：”；第一时间块必须以“[0-3s] 画面：”开头，不允许写成 [0-4s]、【0-3秒】或其他变体；有台词或旁白时，在对应时间块加入“台词（语气/情绪）：角色："原文"”或“旁白（语气）："原文"”；无对白段不要硬塞台词标签，可直接用“声音：”推进，也可写“无对白”。
+8. 每段 seedancePromptText 必须逐字包含阶段 3 dialogueNarration[].text 中的每句台词/旁白原文。
+9. 每段 seedancePromptText 必须包含输入摘要里的 audioNeedsForSeedance，不要复制阶段 3 原始 audioNeeds 中的背景音乐、配乐、BGM、旋律或音乐性铺底；允许保留环境声、动作音效、拟声词、魔法/光效声、人声、台词/旁白、空间回声和必要静默。
+10. 每段 seedancePromptText 必须逐字包含这句话：全程保持角色身份、服装、道具细节和场景空间关系一致。
+11. 每段 seedancePromptText 必须包含“主体动作”四个字，用一句话明确本段主要动作设计。
+12. 当前不支持上传含有清晰写实真人脸的素材；如果 referenceImageManifest 中出现 realistic_human_face 风险，只能写成风格化角色、背影、局部或弱露脸表达。
+13. 不要写 GPT-Image-2、生图、图片生成、参考图生成、模型参数、API payload 或 JSON 以外的解释。
+14. 每个 textOnlyAssets 项的 textPromptInstruction 必须完整吸收进 seedancePromptText；如果 textPromptInstruction 是英文，必须翻译成自然中文写入画面/文本资产描述，但不必逐字保留英文原句。尤其是非核心道具、一次性道具、旁白角色或未生成参考图的资产。
+15. 不要使用“本段视频旨在”“时序故事线”这类摘要式开头；seedancePromptText 必须直接进入导演指令。
+
+### seedancePromptText 固定格式
+每个 seedancePromptText 必须按下面结构写成一段中文纯文本，标签文字必须出现：
+运镜+画面：素材锚定：@图片N 作为……；@图片N 作为……；文本资产：完整吸收 textOnlyAssets 的 textPromptInstruction，英文指令需翻译为自然中文画面描述。空间锚点：明确画面左侧/画面右侧/前景/后景或本场左右基线。
+[0-3s] 画面：景别——主体在画面左侧/右侧/前景/后景的具体动作、表情、朝向、服装道具、环境细节。 运镜：具体镜头运动、焦段、构图、景深、焦点变化。 声音：环境声、动作音效、拟声词、人声、台词/旁白、空间回声或必要静默，不允许任何背景音乐、配乐、BGM、旋律或音乐性铺底。 台词（情绪，可选）：角色："原文"。
+[3-6s] 画面：…… 运镜：…… 声音：……
+主体动作：本段最重要的连续动作是什么，必须清楚、可拍、不中断。
+声音设计：使用 audioNeedsForSeedance，只保留环境声、动作音效、拟声词、魔法/光效声、人声、台词/旁白、空间回声和必要静默；不允许任何背景音乐、配乐、BGM、旋律或音乐性铺底。
+其他需求：全程保持角色身份、服装、道具细节和场景空间关系一致。面部五官清晰稳定不变形，同一角色全程外貌一致，人体/角色结构正常比例自然，动作连续自然不跳帧，无模糊无重影，无字幕无文字，无背景音乐。
+
+### 输出结构
+你必须只输出一个合法 JSON 对象，顶层键必须严格为：seedanceQueueMeta, referenceImageManifest, videoPromptItems, segmentImageMapping, omittedAssets, autoQualityChecks, autoResolvedDecisions。
+
+seedanceQueueMeta 必须包含：schemaVersion, promptStyle, jobId, scenarioName, description, totalSegments, totalDurationSeconds, outputLanguage, subtitlePolicy, pacingStrategy。其中 schemaVersion 必须是 "seedance_lumenflow_v1"，promptStyle 必须是 "lumenflow_time_blocked_directing_prompt"，subtitlePolicy 必须是 "no_subtitles_or_visible_text"。
+
+videoPromptItems 每项必须包含：segmentId, order, durationSeconds, coveredBeatIds, referencedImages, textOnlyAssets, seedancePromptText, continuityRules, audioNotes, autoQualityChecks。seedancePromptText 建议 800-1400 个中文字符，不能低于 600 个字符，不能只是剧情概要。
+
+textOnlyAssets 每项必须完整保留输入候选中的 assetId, assetType, usedInSegments, omissionReason, textPromptInstruction；不要只输出 assetId 或一句说明。
+
+segmentImageMapping 必须是数组，不是对象。数组每项必须包含 segmentId 和 referencedImageQueueIds，例如：[{'segmentId':'seg_01','referencedImageQueueIds':['img_scene_01_scene_establishing_reference']}]。注意实际输出必须使用合法 JSON 双引号。
+
+referencedImages 每项必须包含：queueId, imageHandle, usageRole, usageInstruction。
+
+### 输入：阶段 3 段落计划
+${JSON.stringify(stage3ForStage6, null, 2)}
+
+### 输入：阶段 5 参考图提示词队列摘要
+${JSON.stringify((stage5.promptItems || []).map(item => ({ queueId: item.queueId, assetId: item.assetId, assetType: item.assetType, referenceTypeId: item.referenceTypeId, dependsOnQueueIds: item.dependsOnQueueIds })), null, 2)}
+
+### 输入：未生成参考图的文本资产
+${JSON.stringify(omittedAssets, null, 2)}
+
+### 输入：参考图 Manifest
+${JSON.stringify(referenceImageManifest, null, 2)}
+
+### 每段可选参考图候选
+${JSON.stringify(segmentBriefs.map(segment => ({ segmentId: segment.segmentId, order: segment.order, estimatedDurationSeconds: segment.estimatedDurationSeconds, narrativeGoal: segment.narrativeGoal, storyStateStart: segment.storyStateStart, storyStateEnd: segment.storyStateEnd, shots: segment.shots || [], appearingAssets: segment.appearingAssets || [], referenceImageCandidates: segment.referenceImageCandidates, textOnlyAssets: segment.textOnlyAssets })), null, 2)}
+
+### 每段必须进入 seedancePromptText 的声音/台词摘要（只能使用 audioNeedsForSeedance，禁止原始背景音乐）
+${JSON.stringify(segmentBriefs.map(segment => ({ segmentId: segment.segmentId, dialogueNarration: segment.dialogueNarration || [], audioNeedsForSeedance: segment.audioNeedsForSeedance, subtitlePolicy: '默认无字幕无文字；台词作为人声和口型表演，不生成画面文字；禁止任何背景音乐、配乐、BGM、旋律或音乐性铺底。' })), null, 2)}
+
+请输出 JSON，不要 Markdown 代码块，不要额外说明。`;
+        }
+
+        function normalizeStage6ListField(value) {
+            if (Array.isArray(value)) {
+                return value.map(entry => typeof entry === 'string' ? entry : JSON.stringify(entry));
+            }
+            if (value === undefined || value === null || value === '') return [];
+            return [typeof value === 'string' ? value : JSON.stringify(value)];
+        }
+
+        function textContainsInvalidObjectString(value) {
+            if (typeof value === 'string') return /\[object Object\]/.test(value);
+            if (Array.isArray(value)) return value.some(textContainsInvalidObjectString);
+            if (value && typeof value === 'object') return Object.values(value).some(textContainsInvalidObjectString);
+            return false;
+        }
+
+
+        function normalizeStage6TextOnlyAssets(value, segment, omittedAssets) {
+            const canonicalAssets = segment ? getTextOnlyAssetsForSegment(segment, omittedAssets) : [];
+            const rawItems = Array.isArray(value) ? value : [];
+            const rawByAssetId = new Map(rawItems.map(item => {
+                if (typeof item === 'string') return [item, { assetId: item }];
+                if (item && typeof item === 'object') return [item.assetId || item.id || item.stableId || '', item];
+                return ['', {}];
+            }).filter(([assetId]) => assetId));
+
+            if (canonicalAssets.length > 0) {
+                return canonicalAssets.map(asset => {
+                    const raw = rawByAssetId.get(asset.assetId) || {};
+                    return {
+                        ...raw,
+                        assetId: asset.assetId,
+                        assetType: asset.assetType,
+                        usedInSegments: Array.isArray(asset.usedInSegments) ? asset.usedInSegments : [],
+                        omissionReason: raw.omissionReason || asset.omissionReason,
+                        textPromptInstruction: raw.textPromptInstruction || asset.textPromptInstruction
+                    };
+                });
+            }
+
+            return rawItems.map((item, index) => {
+                if (typeof item === 'string') {
+                    return {
+                        assetId: item,
+                        assetType: 'other',
+                        usedInSegments: segment ? [segment.segmentId] : [],
+                        omissionReason: '模型输出了文本资产字符串，系统自动补齐为文本资产项。',
+                        textPromptInstruction: item
+                    };
+                }
+                return {
+                    ...item,
+                    assetId: item?.assetId || item?.id || item?.stableId || `text_asset_${index + 1}`,
+                    assetType: item?.assetType || 'other',
+                    usedInSegments: Array.isArray(item?.usedInSegments) ? item.usedInSegments : (segment ? [segment.segmentId] : []),
+                    omissionReason: item?.omissionReason || '模型输出字段不完整，系统自动补齐。',
+                    textPromptInstruction: item?.textPromptInstruction || item?.instruction || item?.description || stringifyModelText(item)
+                };
+            });
+        }
+
+        function containsTextOnlyAssetInstruction(promptText, asset) {
+            const prompt = String(promptText || '');
+            const instruction = String(asset?.textPromptInstruction || '');
+            if (!instruction) return true;
+            if (prompt.includes(instruction)) return true;
+
+            const source = `${asset?.assetId || ''} ${instruction}`.toLowerCase();
+            const semanticGroups = [];
+            const addGroup = patterns => semanticGroups.push(patterns.map(pattern => new RegExp(pattern, 'i')));
+
+            if (/magic circle|awakening circle|rune|geometric|stone floor|sacred light|awakening-circle/.test(source)) {
+                addGroup(['法阵', '魔法阵', '觉醒阵', '圆形法阵', 'magic circle']);
+                addGroup(['符文', '纹路', '几何', 'rune', 'geometric']);
+                addGroup(['石板', '石质', '地板', '地面', 'stone floor']);
+                addGroup(['雕刻', '刻着', '刻有', 'carved']);
+                addGroup(['发光', '光芒', '亮起', '圣光', 'glow', 'sacred light']);
+            }
+
+            if (/void|pure black|black void|consciousness|non-physical|consciousness-space/.test(source)) {
+                addGroup(['虚空', '纯黑', '黑暗', '无尽', '意识空间', 'black void']);
+                addGroup(['光源', '光线', '角色', 'visual elements', 'light source']);
+                addGroup(['超现实', '非实体', '非物理', '梦境', '意识', 'surreal']);
+            }
+
+            if (/ovoid stone|smooth|polished|dark.*stone|awakening-stones/.test(source)) {
+                addGroup(['六颗', '六个', '一组', 'set of six']);
+                addGroup(['卵石', '石子', '石块', 'stones']);
+                addGroup(['光滑', '抛光', 'smooth', 'polished']);
+                addGroup(['深色', '黑色', 'dark']);
+                addGroup(['温暖', '柔和', '发光', 'glow']);
+            }
+
+            if (semanticGroups.length === 0) return false;
+            const matched = semanticGroups.filter(group => group.some(pattern => pattern.test(prompt))).length;
+            return matched >= Math.min(3, semanticGroups.length);
+        }
+
+        function validateStage6PromptItem(item, segment, manifestMap) {
+            requireObject(item, `videoPromptItems.${segment.segmentId}`);
+            requireFields(item, [
+                'segmentId', 'order', 'durationSeconds', 'coveredBeatIds', 'referencedImages',
+                'textOnlyAssets', 'seedancePromptText', 'continuityRules', 'audioNotes', 'autoQualityChecks'
+            ], `videoPromptItems.${segment.segmentId}`);
+            if (item.segmentId !== segment.segmentId) throw new Error(`videoPromptItems.segmentId 不匹配: ${item.segmentId}`);
+            if (!Number.isFinite(item.durationSeconds) || item.durationSeconds < 4 || item.durationSeconds > 15) {
+                throw new Error(`${item.segmentId}.durationSeconds 必须为 4-15 秒`);
+            }
+            requireArray(item.coveredBeatIds, `${item.segmentId}.coveredBeatIds`);
+            requireArray(item.referencedImages, `${item.segmentId}.referencedImages`);
+            requireArray(item.textOnlyAssets, `${item.segmentId}.textOnlyAssets`);
+            if (item.referencedImages.length > 9) throw new Error(`${item.segmentId}.referencedImages 不能超过 9 张图片`);
+            if ((item.seedancePromptText || '').length < 600) throw new Error(`${item.segmentId}.seedancePromptText 过短，必须是完整 Lumenflow 式 Seedance 分镜提示词而不是摘要`);
+            if (!/[\u4e00-\u9fff]/.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 必须是中文提示词`);
+            const promptText = String(item.seedancePromptText || '');
+            const timeBlocks = promptText.match(/(?:\[|【)?\d+\s*[-到至]\s*\d+\s*(?:s|秒)(?:]|】)?/g) || [];
+            const requiredTimeBlocks = Math.max(2, Math.min((segment.shots || []).length || 2, 4));
+            if (timeBlocks.length < requiredTimeBlocks) throw new Error(`${item.segmentId}.seedancePromptText 必须至少包含 ${requiredTimeBlocks} 个按秒划分的时间块`);
+            const firstTimeBlock = timeBlocks[0] || '';
+            const firstTimeBlockIndex = promptText.indexOf(firstTimeBlock);
+            const firstTimeBlockSuffix = firstTimeBlockIndex >= 0 ? promptText.slice(firstTimeBlockIndex + firstTimeBlock.length, firstTimeBlockIndex + firstTimeBlock.length + 12) : '';
+            if (firstTimeBlock !== '[0-3s]' || !/^\s*画面：/.test(firstTimeBlockSuffix)) throw new Error(`${item.segmentId}.seedancePromptText 第一个时间块必须逐字使用 [0-3s] 画面：格式`);
+            if (!/(运镜\+画面)/.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 必须以 Lumenflow 式“运镜+画面”结构组织`);
+            ['画面：', '运镜：', '声音：', '其他需求：'].forEach(label => {
+                if (!String(item.seedancePromptText || '').includes(label)) throw new Error(`${item.segmentId}.seedancePromptText 必须包含 ${label}`);
+            });
+            if (!/(镜头|景别|推近|拉远|跟随|摇移|固定|特写|全景|中景|运镜|Dolly|Truck|Orbit|Rack Focus)/.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 必须包含镜头或运镜描述`);
+            if (!/(全景|中景|近景|特写|极近特写|过肩|俯拍|仰拍|平拍)/.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 必须包含明确景别`);
+            if (!/(空间锚点|画面左侧|画面右侧|左右基线|关系锚定|前景|后景)/.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 必须包含空间锚点或左右基线`);
+            if (!/(主体动作|动作|走|看|拿|递|展示|移动|转身|把玩|退还|围观|凝视|询问|取出|打开|说|对话|接过|放回|购买)/.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 必须包含动作描述`);
+            if (!/(连续|保持|一致|不要改变|稳定)/.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 必须包含连续性要求`);
+            if (!/(声音：|声音设计|音效|环境声|回声|拟声|人声|旁白|台词|光效声|魔法声|笑声|脚步声|沉默|寂静)/.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 必须包含声音设计`);
+            if (!/(无字幕无文字)/.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 必须包含无字幕无文字约束`);
+            if (/(本段视频旨在|时序故事线)/.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 仍是摘要式写法，必须改为时间块导演提示词`);
+            if (/(GPT-Image-2|生图|图片生成|参考图生成|prompt queue|API|payload|参数)/i.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 包含非 Seedance 视频提示词语言`);
+            if (textContainsInvalidObjectString(item)) throw new Error(`${item.segmentId} 包含无效对象字符串 [object Object]`);
+
+            const dialogueItems = segment.dialogueNarration || [];
+            if (dialogueItems.length > 0) {
+                dialogueItems.forEach(dialogue => {
+                    const dialogueText = getDialogueNarrationText(dialogue);
+                    if (dialogueText && !String(item.seedancePromptText || '').includes(dialogueText)) throw new Error(`${item.segmentId}.seedancePromptText 必须包含台词/旁白原文: ${dialogueText}`);
+                });
+                if (!/(台词|旁白|口型|人声)/.test(item.seedancePromptText || '')) throw new Error(`${item.segmentId}.seedancePromptText 必须把台词/旁白写成声音和口型表演`);
+            }
+
+            const audioNeedsForSeedance = sanitizeAudioNeedsForNoBackgroundMusic(segment.audioNeeds);
+            if (!String(item.seedancePromptText || '').includes(audioNeedsForSeedance)) {
+                throw new Error(`${item.segmentId}.seedancePromptText 必须吸收 audioNeedsForSeedance 的无背景音乐声音信息`);
+            }
+            if (containsForbiddenBackgroundMusic(item.seedancePromptText)) {
+                throw new Error(`${item.segmentId}.seedancePromptText 不允许包含背景音乐、配乐、BGM、旋律或音乐性铺底`);
+            }
+
+            item.referencedImages.forEach((image, index) => {
+                const label = `${item.segmentId}.referencedImages[${index}]`;
+                requireObject(image, label);
+                requireFields(image, ['queueId', 'imageHandle', 'usageRole', 'usageInstruction'], label);
+                const manifestItem = manifestMap.get(image.queueId);
+                if (!manifestItem) throw new Error(`${label}.queueId 不存在于 referenceImageManifest: ${image.queueId}`);
+                if (image.imageHandle !== manifestItem.imageHandle) throw new Error(`${label}.imageHandle 与 manifest 不一致`);
+                if (!(item.seedancePromptText || '').includes(image.imageHandle)) throw new Error(`${item.segmentId}.seedancePromptText 必须显式包含 ${image.imageHandle}`);
+            });
+            requireArray(item.continuityRules, `${item.segmentId}.continuityRules`);
+            requireArray(item.audioNotes, `${item.segmentId}.audioNotes`);
+            requireArray(item.autoQualityChecks, `${item.segmentId}.autoQualityChecks`);
+            item.textOnlyAssets.forEach((asset, index) => {
+                const label = `${item.segmentId}.textOnlyAssets[${index}]`;
+                requireObject(asset, label);
+                requireFields(asset, ['assetId', 'assetType', 'usedInSegments', 'omissionReason', 'textPromptInstruction'], label);
+                if (!containsTextOnlyAssetInstruction(item.seedancePromptText, asset)) {
+                    throw new Error(`${item.segmentId}.seedancePromptText 必须吸收 textOnlyAssets 指令核心语义: ${asset.assetId}`);
+                }
+            });
+        }
+
+        function normalizeStage6Output(data, referenceImageManifest, stage3, stage5) {
+            const segmentsById = new Map((stage3.segments || []).map(segment => [segment.segmentId, segment]));
+            const omittedAssets = stage5.omittedAssets || [];
+            if (Array.isArray(data.videoPromptItems)) {
+                data.videoPromptItems.forEach(item => {
+                    const segment = segmentsById.get(item.segmentId);
+                    if (!Array.isArray(item.coveredBeatIds) && segment) item.coveredBeatIds = segment.coveredBeatIds || [];
+                    if (!Array.isArray(item.referencedImages)) item.referencedImages = [];
+                    item.textOnlyAssets = normalizeStage6TextOnlyAssets(item.textOnlyAssets, segment, omittedAssets);
+                    item.continuityRules = normalizeStage6ListField(item.continuityRules);
+                    item.audioNotes = normalizeStage6ListField(item.audioNotes);
+                    item.autoQualityChecks = normalizeStage6ListField(item.autoQualityChecks);
+                });
+            }
+
+            if (!Array.isArray(data.segmentImageMapping)) {
+                if (data.segmentImageMapping && typeof data.segmentImageMapping === 'object') {
+                    data.segmentImageMapping = Object.entries(data.segmentImageMapping).map(([segmentId, value]) => ({
+                        segmentId,
+                        referencedImageQueueIds: Array.isArray(value) ? value : (value.referencedImageQueueIds || [])
+                    }));
+                } else if (Array.isArray(data.videoPromptItems)) {
+                    data.segmentImageMapping = data.videoPromptItems.map(item => ({
+                        segmentId: item.segmentId,
+                        referencedImageQueueIds: (item.referencedImages || []).map(image => image.queueId)
+                    }));
+                }
+            }
+
+            data.referenceImageManifest = referenceImageManifest;
+            data.omittedAssets = omittedAssets;
+            data.autoQualityChecks = normalizeStage6ListField(data.autoQualityChecks);
+            data.autoResolvedDecisions = normalizeStage6ListField(data.autoResolvedDecisions);
+            return data;
+        }
+
+        function validateStage6Output(data, stage3, stage5) {
+            validateExactTopLevelKeys(data, ['seedanceQueueMeta', 'referenceImageManifest', 'videoPromptItems', 'segmentImageMapping', 'omittedAssets', 'autoQualityChecks', 'autoResolvedDecisions']);
+            requireObject(data.seedanceQueueMeta, 'seedanceQueueMeta');
+            if (data.seedanceQueueMeta.schemaVersion !== 'seedance_lumenflow_v1') throw new Error('seedanceQueueMeta.schemaVersion 必须是 seedance_lumenflow_v1');
+            if (data.seedanceQueueMeta.promptStyle !== 'lumenflow_time_blocked_directing_prompt') throw new Error('seedanceQueueMeta.promptStyle 必须是 lumenflow_time_blocked_directing_prompt');
+            if (data.seedanceQueueMeta.outputLanguage !== 'zh-CN') throw new Error('seedanceQueueMeta.outputLanguage 必须是 zh-CN');
+            if (data.seedanceQueueMeta.subtitlePolicy !== 'no_subtitles_or_visible_text') throw new Error('seedanceQueueMeta.subtitlePolicy 必须是 no_subtitles_or_visible_text');
+            requireArray(data.referenceImageManifest, 'referenceImageManifest');
+            requireArray(data.videoPromptItems, 'videoPromptItems');
+            requireArray(data.segmentImageMapping, 'segmentImageMapping');
+            requireArray(data.omittedAssets, 'omittedAssets');
+            requireArray(data.autoQualityChecks, 'autoQualityChecks');
+            requireArray(data.autoResolvedDecisions, 'autoResolvedDecisions');
+            validateReferenceImageManifest(data.referenceImageManifest, stage5);
+
+            const manifestMap = new Map(data.referenceImageManifest.map(item => [item.queueId, item]));
+            const itemsBySegment = new Map(data.videoPromptItems.map(item => [item.segmentId, item]));
+            if (itemsBySegment.size !== data.videoPromptItems.length) throw new Error('videoPromptItems 包含重复 segmentId');
+            (stage3.segments || []).forEach(segment => {
+                const item = itemsBySegment.get(segment.segmentId);
+                if (!item) throw new Error(`videoPromptItems 缺少 segmentId: ${segment.segmentId}`);
+                validateStage6PromptItem(item, segment, manifestMap);
+            });
+        }
+
+
+        function buildStage6RepairPrompt(originalPrompt, validationError, invalidOutput) {
+            const invalidJson = typeof invalidOutput === 'string' ? invalidOutput : JSON.stringify(invalidOutput, null, 2);
+            return `${originalPrompt}
+
+### 自动校验失败，需要你修复输出
+上一轮 JSON 没有通过页面自动校验，错误如下：
+${validationError}
+
+请基于同一任务完整修复 JSON。必须只输出一个合法 JSON 对象，不要输出 Markdown，不要解释。
+重点要求：
+- 保留顶层键：seedanceQueueMeta, referenceImageManifest, videoPromptItems, segmentImageMapping, omittedAssets, autoQualityChecks, autoResolvedDecisions。
+- 不要删除任何 segment；每个 Stage 3 segment 都必须有一个 videoPromptItems 项。
+- 每个 seedancePromptText 必须是完整 Lumenflow 式导演提示词，不得低于 600 个中文字符，即使是结尾寓意段也要写足画面、运镜、声音、主体动作、空间锚点和其他需求。
+- 每段必须包含 运镜+画面、画面：、运镜：、声音：、主体动作、声音设计、其他需求、空间锚点或左右基线、无字幕无文字。
+- 每段第一个时间块必须逐字使用 [0-3s] 画面：格式，不允许在它之前出现任何其他秒数时间块。
+- 必须逐字包含该段 Stage 3 的 dialogueNarration[].text，并包含 audioNeedsForSeedance；不要复制原始 audioNeeds 中的背景音乐、配乐、BGM、旋律或音乐性铺底。
+- 每个 textOnlyAssets.textPromptInstruction 的核心语义必须进入对应 seedancePromptText；英文 textPromptInstruction 应翻译成自然中文画面描述，不要求逐字保留英文原句。
+
+上一轮未通过的 JSON：
+${invalidJson}`;
+        }
+
+        async function runStage6Pipeline({ stage3, stage5, referenceImageManifest, onProgress = null }) {
+            if (!stage3 || !stage5) throw new Error('Stage 6 requires stage3 and stage5 data');
+            validateReferenceImageManifest(referenceImageManifest, stage5);
+
+            const originalPrompt = buildStage6Prompt(stage3, stage5, referenceImageManifest);
+            let currentPrompt = originalPrompt;
+            let parsedJson = null;
+            let lastError = null;
+            const maxRepairAttempts = 3;
+
+            for (let attempt = 1; attempt <= maxRepairAttempts; attempt += 1) {
+                if (onProgress) onProgress(attempt === 1 ? '正在生成 Seedance 提示词队列...' : `正在自动修复 Stage 6 输出（第 ${attempt - 1} 轮）...`);
+                const resultText = await callGemini(currentPrompt);
+                try {
+                    parsedJson = JSON.parse(resultText);
+                } catch (err) {
+                    lastError = new Error('阶段 6 API 返回的不是有效的 JSON 格式');
+                    if (attempt >= maxRepairAttempts) throw lastError;
+                    currentPrompt = buildStage6RepairPrompt(originalPrompt, lastError.message, resultText);
+                    continue;
+                }
+
+                parsedJson = normalizeStage6Output(parsedJson, referenceImageManifest, stage3, stage5);
+                try {
+                    validateStage6Output(parsedJson, stage3, stage5);
+                    break;
+                } catch (err) {
+                    lastError = err;
+                    if (attempt >= maxRepairAttempts) throw err;
+                    currentPrompt = buildStage6RepairPrompt(originalPrompt, err.message, parsedJson);
+                }
+            }
+
+            if (!parsedJson) throw lastError || new Error('阶段 6 输出为空');
+            parsedJson.seedanceQueueMeta = {
+                ...parsedJson.seedanceQueueMeta,
+                generatedAt: new Date().toISOString(),
+                source: 'Generated by Stage 6 application code with Gemini from Stage 3, Stage 5, and referenceImageManifest'
+            };
+            validateStage6Output(parsedJson, stage3, stage5);
+            return parsedJson;
+        }
+
+        window.shortDramaPipeline = {
+            runStage5: runStage5Pipeline,
+            runStage6: runStage6Pipeline,
+            buildDefaultReferenceImageManifest,
+            renderStageOutput,
+            clearStageOutput,
+            setApiKey(key) {
+                apiKey = key;
+            }
+        };
+
+        btnRunS5.addEventListener('click', async () => {
+            if (!projectData.stage4) {
+                s5Error.textContent = '请先完成阶段 4';
+                s5Error.classList.add('active');
+                return;
+            }
+
+            s5Error.classList.remove('active');
+            projectData.stage5 = null;
+            s5OutputSec.classList.remove('active');
+            clearStageOutput('s5');
+            s5Card.classList.remove('done');
+            btnRunS5.disabled = true;
+            btnRunS5.classList.add('loading');
+            s5Progress.style.display = 'block';
+            s5Progress.textContent = '正在构建提示词队列骨架...';
+
+            try {
+                const aspectRatio = s1Aspect.value;
+                const stage5Data = await runStage5Pipeline({
+                    stage2: projectData.stage2,
+                    stage4: projectData.stage4,
+                    aspectRatio,
+                    onProgress: ({ current, total, repairAttempt }) => {
+                        if (repairAttempt) {
+                            s5Progress.textContent = `正在自动修复批次 ${current}（第 ${repairAttempt} 轮）...`;
+                            return;
+                        }
+                        s5Progress.textContent = `正在处理批次 ${current} / ${total}...`;
+                    }
+                });
+
+                // Success
+                projectData.stage5 = stage5Data;
+                renderStageOutput('s5', stage5Data);
+                s5OutputSec.classList.add('active');
+
+                s5Status.textContent = 'Done';
+                s5Status.className = 'status-badge status-done';
+                s5Card.classList.add('done');
+                s5Card.classList.remove('active');
+                s5Progress.style.display = 'none';
+
+                s6Manifest.value = JSON.stringify(buildDefaultReferenceImageManifest(stage5Data), null, 2);
+                resetStage6({ locked: false });
+
+            } catch (err) {
+                s5Error.textContent = err.message;
+                s5Error.classList.add('active');
+                s5Status.textContent = 'Error';
+                s5Status.className = 'status-badge status-error';
+                s5Progress.style.display = 'none';
+            } finally {
+                btnRunS5.disabled = false;
+                btnRunS5.classList.remove('loading');
+            }
+        });
+
+        btnCopyS5.addEventListener('click', () => {
+            navigator.clipboard.writeText(JSON.stringify(projectData.stage5, null, 2));
+            const originalText = btnCopyS5.textContent;
+            btnCopyS5.textContent = '已复制!';
+            setTimeout(() => btnCopyS5.textContent = originalText, 2000);
+        });
+
+        btnRunS6.addEventListener('click', async () => {
+            if (!projectData.stage3 || !projectData.stage5) {
+                s6Error.textContent = '请先完成阶段 3 和阶段 5';
+                s6Error.classList.add('active');
+                return;
+            }
+
+            s6Error.classList.remove('active');
+            projectData.stage6 = null;
+            s6OutputSec.classList.remove('active');
+            clearStageOutput('s6');
+            s6Card.classList.remove('done');
+            btnRunS6.disabled = true;
+            btnRunS6.classList.add('loading');
+            s6Progress.style.display = 'block';
+            s6Progress.textContent = '正在解析参考图 Manifest...';
+
+            try {
+                const manifest = JSON.parse(s6Manifest.value || '[]');
+                const stage6Data = await runStage6Pipeline({
+                    stage3: projectData.stage3,
+                    stage5: projectData.stage5,
+                    referenceImageManifest: manifest,
+                    onProgress: message => {
+                        s6Progress.textContent = message;
+                    }
+                });
+
+                projectData.stage6 = stage6Data;
+                renderStageOutput('s6', stage6Data);
+                s6OutputSec.classList.add('active');
+                s6Status.textContent = 'Done';
+                s6Status.className = 'status-badge status-done';
+                s6Card.classList.add('done');
+                s6Card.classList.remove('active');
+                s6Progress.style.display = 'none';
+            } catch (err) {
+                s6Error.textContent = err.message;
+                s6Error.classList.add('active');
+                s6Status.textContent = 'Error';
+                s6Status.className = 'status-badge status-error';
+                s6Progress.style.display = 'none';
+            } finally {
+                btnRunS6.disabled = false;
+                btnRunS6.classList.remove('loading');
+            }
+        });
+
+        btnCopyS6.addEventListener('click', () => {
+            navigator.clipboard.writeText(JSON.stringify(projectData.stage6, null, 2));
+            const originalText = btnCopyS6.textContent;
+            btnCopyS6.textContent = '已复制!';
+            setTimeout(() => btnCopyS6.textContent = originalText, 2000);
+        });
+
+    </script>
+</body>
+</html>
