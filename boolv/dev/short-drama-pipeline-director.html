@@ -545,6 +545,13 @@
                             <option value="yes" selected>全自动：模型自行合理解决问题</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label for="s1-auto-run-intermediate">自动运行中间步骤</label>
+                        <label style="display: flex; align-items: center; gap: var(--spacing-sm); font-size: 0.875rem; color: var(--text-muted); height: 100%;">
+                            <input type="checkbox" id="s1-auto-run-intermediate" style="width: auto;" checked>
+                            <span style="font-size: 1rem">阶段 1 完成后自动运行阶段 2-5</span>
+                        </label>
+                    </div>
                 </div>
                 <div class="error-msg" id="s1-error"></div>
                 <div>
@@ -860,6 +867,7 @@
             stage6: null
         };
         let pipelineRunToken = 0;
+        let autoRunIntermediateActive = false;
 
         function beginPipelineRun() {
             pipelineRunToken += 1;
@@ -868,10 +876,29 @@
 
         function invalidatePipelineRuns() {
             pipelineRunToken += 1;
+            autoRunIntermediateActive = false;
         }
 
         function isCurrentPipelineRun(token) {
             return token === pipelineRunToken;
+        }
+
+        function refreshIntermediateRunButtons() {
+            if (autoRunIntermediateActive) {
+                lockIntermediateRunButtons();
+                return;
+            }
+            btnRunS1.disabled = false;
+            btnRunS2.disabled = !projectData.stage1;
+            btnRunS3.disabled = !projectData.stage2;
+            btnRunS4.disabled = !projectData.stage3;
+            btnRunS5.disabled = !projectData.stage4;
+        }
+
+        function lockIntermediateRunButtons() {
+            [btnRunS1, btnRunS2, btnRunS3, btnRunS4, btnRunS5].forEach(button => {
+                button.disabled = true;
+            });
         }
 
         // DOM Elements
@@ -895,6 +922,7 @@
         const s1Aspect = document.getElementById('s1-aspect');
         const s1Lang = document.getElementById('s1-lang');
         const s1AutoResolve = document.getElementById('s1-auto-resolve');
+        const s1AutoRunIntermediate = document.getElementById('s1-auto-run-intermediate');
         const btnRunS1 = document.getElementById('btn-run-s1');
         const s1Error = document.getElementById('s1-error');
         const s1OutputSec = document.getElementById('s1-output-sec');
@@ -1295,7 +1323,8 @@
                 visualStyle: s1Style.value,
                 aspectRatio: s1Aspect.value,
                 language: s1Lang.value,
-                automationMode: s1AutoResolve.value
+                automationMode: s1AutoResolve.value,
+                autoRunIntermediateStages: s1AutoRunIntermediate.checked
             };
         }
 
@@ -1306,6 +1335,11 @@
             if (typeof inputs.aspectRatio === 'string') s1Aspect.value = inputs.aspectRatio;
             if (typeof inputs.language === 'string') s1Lang.value = inputs.language;
             if (typeof inputs.automationMode === 'string') s1AutoResolve.value = inputs.automationMode;
+            if (typeof inputs.autoRunIntermediateStages === 'boolean') s1AutoRunIntermediate.checked = inputs.autoRunIntermediateStages;
+        }
+
+        function shouldAutoRunIntermediateStages() {
+            return Boolean(s1AutoRunIntermediate.checked);
         }
 
         function parseCheckpointManifest(stage5) {
@@ -2404,14 +2438,13 @@
         }
 
         // Stage 1 Logic
-        btnRunS1.addEventListener('click', async () => {
+        async function runStage1FromUi({ runToken = beginPipelineRun() } = {}) {
             const script = s1Script.value.trim();
             if (!script) {
                 s1Error.textContent = '请输入剧本内容';
                 s1Error.classList.add('active');
                 return;
             }
-            const runToken = beginPipelineRun();
 
             s1Error.classList.remove('active');
             projectData.stage1 = null;
@@ -2493,6 +2526,15 @@ Language: ${s1Lang.value}
                 // Unlock Stage 2 with a clean downstream state
                 resetStage2({ locked: false });
 
+                if (shouldAutoRunIntermediateStages()) {
+                    btnRunS1.classList.remove('loading');
+                    try {
+                        await runIntermediateStagesAfterStage1(runToken);
+                    } catch (err) {
+                        if (isCurrentPipelineRun(runToken)) showCheckpointMessage(`自动运行中断：${err.message}`, 'error');
+                    }
+                }
+
             } catch (err) {
                 if (!isCurrentPipelineRun(runToken)) return;
                 s1Error.textContent = err.message;
@@ -2501,11 +2543,13 @@ Language: ${s1Lang.value}
                 s1Status.className = 'status-badge status-error';
             } finally {
                 if (isCurrentPipelineRun(runToken)) {
-                    btnRunS1.disabled = false;
                     btnRunS1.classList.remove('loading');
+                    refreshIntermediateRunButtons();
                 }
             }
-        });
+        }
+
+        btnRunS1.addEventListener('click', () => runStage1FromUi());
 
         btnCopyS1.addEventListener('click', () => {
             navigator.clipboard.writeText(JSON.stringify(projectData.stage1, null, 2));
@@ -2515,13 +2559,12 @@ Language: ${s1Lang.value}
         });
 
         // Stage 2 Logic
-        btnRunS2.addEventListener('click', async () => {
+        async function runStage2FromUi({ runToken = beginPipelineRun(), throwOnError = false } = {}) {
             if (!projectData.stage1) {
                 s2Error.textContent = '请先完成阶段 1';
                 s2Error.classList.add('active');
                 return;
             }
-            const runToken = beginPipelineRun();
 
             s2Error.classList.remove('active');
             projectData.stage2 = null;
@@ -2596,6 +2639,7 @@ ${JSON.stringify(projectData.stage1)}
 
                 // Unlock Stage 3 with a clean downstream state
                 resetStage3({ locked: false });
+                return parsedJson;
 
             } catch (err) {
                 if (!isCurrentPipelineRun(runToken)) return;
@@ -2603,13 +2647,16 @@ ${JSON.stringify(projectData.stage1)}
                 s2Error.classList.add('active');
                 s2Status.textContent = 'Error';
                 s2Status.className = 'status-badge status-error';
+                if (throwOnError) throw err;
             } finally {
                 if (isCurrentPipelineRun(runToken)) {
-                    btnRunS2.disabled = false;
                     btnRunS2.classList.remove('loading');
+                    refreshIntermediateRunButtons();
                 }
             }
-        });
+        }
+
+        btnRunS2.addEventListener('click', () => runStage2FromUi());
 
         btnCopyS2.addEventListener('click', () => {
             navigator.clipboard.writeText(JSON.stringify(projectData.stage2, null, 2));
@@ -2647,13 +2694,12 @@ ${invalidJson}
         }
 
         // Stage 3 Logic
-        btnRunS3.addEventListener('click', async () => {
+        async function runStage3FromUi({ runToken = beginPipelineRun(), throwOnError = false } = {}) {
             if (!projectData.stage1 || !projectData.stage2) {
                 s3Error.textContent = '请先完成阶段 1 和阶段 2';
                 s3Error.classList.add('active');
                 return;
             }
-            const runToken = beginPipelineRun();
 
             s3Error.classList.remove('active');
             projectData.stage3 = null;
@@ -2779,6 +2825,7 @@ ${JSON.stringify(projectData.stage2)}
 
                 // Unlock Stage 4
                 resetStage4({ locked: false });
+                return parsedJson;
 
             } catch (err) {
                 if (!isCurrentPipelineRun(runToken)) return;
@@ -2786,13 +2833,16 @@ ${JSON.stringify(projectData.stage2)}
                 s3Error.classList.add('active');
                 s3Status.textContent = 'Error';
                 s3Status.className = 'status-badge status-error';
+                if (throwOnError) throw err;
             } finally {
                 if (isCurrentPipelineRun(runToken)) {
-                    btnRunS3.disabled = false;
                     btnRunS3.classList.remove('loading');
+                    refreshIntermediateRunButtons();
                 }
             }
-        });
+        }
+
+        btnRunS3.addEventListener('click', () => runStage3FromUi());
 
         btnCopyS3.addEventListener('click', () => {
             navigator.clipboard.writeText(JSON.stringify(projectData.stage3, null, 2));
@@ -2802,13 +2852,12 @@ ${JSON.stringify(projectData.stage2)}
         });
 
         // Stage 4 Logic
-        btnRunS4.addEventListener('click', async () => {
+        async function runStage4FromUi({ runToken = beginPipelineRun(), throwOnError = false } = {}) {
             if (!projectData.stage2 || !projectData.stage3) {
                 s4Error.textContent = '请先完成阶段 2 和阶段 3';
                 s4Error.classList.add('active');
                 return;
             }
-            const runToken = beginPipelineRun();
 
             s4Error.classList.remove('active');
             projectData.stage4 = null;
@@ -2912,6 +2961,7 @@ Remember: output exactly one JSON object. Do not include Markdown fences, explan
 
                 // Unlock Stage 5
                 resetStage5({ locked: false });
+                return parsedJson;
 
             } catch (err) {
                 if (!isCurrentPipelineRun(runToken)) return;
@@ -2919,13 +2969,16 @@ Remember: output exactly one JSON object. Do not include Markdown fences, explan
                 s4Error.classList.add('active');
                 s4Status.textContent = 'Error';
                 s4Status.className = 'status-badge status-error';
+                if (throwOnError) throw err;
             } finally {
                 if (isCurrentPipelineRun(runToken)) {
-                    btnRunS4.disabled = false;
                     btnRunS4.classList.remove('loading');
+                    refreshIntermediateRunButtons();
                 }
             }
-        });
+        }
+
+        btnRunS4.addEventListener('click', () => runStage4FromUi());
 
         btnCopyS4.addEventListener('click', () => {
             navigator.clipboard.writeText(JSON.stringify(projectData.stage4, null, 2));
@@ -4457,13 +4510,12 @@ ${invalidJson}
             }
         };
 
-        btnRunS5.addEventListener('click', async () => {
+        async function runStage5FromUi({ runToken = beginPipelineRun(), throwOnError = false } = {}) {
             if (!projectData.stage4) {
                 s5Error.textContent = '请先完成阶段 4';
                 s5Error.classList.add('active');
                 return;
             }
-            const runToken = beginPipelineRun();
 
             s5Error.classList.remove('active');
             projectData.stage5 = null;
@@ -4505,6 +4557,7 @@ ${invalidJson}
 
                 s6Manifest.value = JSON.stringify(buildDefaultReferenceImageManifest(stage5Data), null, 2);
                 resetStage6({ locked: false });
+                return stage5Data;
 
             } catch (err) {
                 if (!isCurrentPipelineRun(runToken)) return;
@@ -4513,13 +4566,38 @@ ${invalidJson}
                 s5Status.textContent = 'Error';
                 s5Status.className = 'status-badge status-error';
                 s5Progress.style.display = 'none';
+                if (throwOnError) throw err;
             } finally {
                 if (isCurrentPipelineRun(runToken)) {
-                    btnRunS5.disabled = false;
                     btnRunS5.classList.remove('loading');
+                    refreshIntermediateRunButtons();
                 }
             }
-        });
+        }
+
+        async function runIntermediateStagesAfterStage1(runToken) {
+            if (!isCurrentPipelineRun(runToken)) return;
+            autoRunIntermediateActive = true;
+            lockIntermediateRunButtons();
+            try {
+                showCheckpointMessage('已开启自动运行：正在依次执行阶段 2-5。', 'success');
+                await runStage2FromUi({ runToken, throwOnError: true });
+                if (!isCurrentPipelineRun(runToken)) return;
+                await runStage3FromUi({ runToken, throwOnError: true });
+                if (!isCurrentPipelineRun(runToken)) return;
+                await runStage4FromUi({ runToken, throwOnError: true });
+                if (!isCurrentPipelineRun(runToken)) return;
+                await runStage5FromUi({ runToken, throwOnError: true });
+                if (isCurrentPipelineRun(runToken)) showCheckpointMessage('阶段 1-5 已自动运行完成，可继续检查参考图 Manifest 并运行阶段 6。', 'success');
+            } finally {
+                if (isCurrentPipelineRun(runToken)) {
+                    autoRunIntermediateActive = false;
+                    refreshIntermediateRunButtons();
+                }
+            }
+        }
+
+        btnRunS5.addEventListener('click', () => runStage5FromUi());
 
         btnCopyS5.addEventListener('click', () => {
             navigator.clipboard.writeText(JSON.stringify(projectData.stage5, null, 2));
