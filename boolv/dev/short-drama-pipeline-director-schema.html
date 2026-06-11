@@ -828,6 +828,370 @@
             'generationParameters'
         ];
 
+        function schemaObject(properties, required = Object.keys(properties)) {
+            return {
+                type: 'object',
+                properties,
+                required,
+                additionalProperties: false,
+                propertyOrdering: Object.keys(properties)
+            };
+        }
+
+        function schemaString(description) {
+            return { type: 'string', description };
+        }
+
+        function schemaStringArray(description) {
+            return { type: 'array', items: { type: 'string' }, description };
+        }
+
+        function schemaInteger(description) {
+            return { type: 'integer', description };
+        }
+
+        function schemaNumber(description) {
+            return { type: 'number', description };
+        }
+
+        function schemaEnum(values, description) {
+            return { type: 'string', enum: values, description };
+        }
+
+        function schemaArray(items, description) {
+            return { type: 'array', items, description };
+        }
+
+        function schemaLooseObject(description) {
+            return { type: 'object', additionalProperties: true, description };
+        }
+
+        function schemaNullableObject(properties, description) {
+            return { ...schemaObject(properties), nullable: true, description };
+        }
+
+        const stage1SceneSchema = schemaObject({
+            sceneId: schemaString('Stable scene ID, such as scene-001. Use consistently in plotBeats.relatedSceneIds.'),
+            time: schemaString('Story time or temporal cue extracted from the script, for example day/night, present/past, or a stated date.'),
+            location: schemaString('Main physical location of the scene, grounded in the script.'),
+            visualStyleCues: schemaString('Concrete visual cues present or implied in the script. Do not write image/video prompt language.'),
+            storyPurpose: schemaString('Narrative purpose of this scene in the story, such as setup, conflict, reveal, reversal, or resolution.')
+        });
+
+        const stage1CharacterSchema = schemaObject({
+            characterId: schemaString('Stable character ID, such as char-001. Use consistently in plotBeats, props, and dialogueNarration links.'),
+            name: schemaString('Character name or concise role label if unnamed.'),
+            firstAppearanceBeatId: schemaString('beatId where this character first appears or becomes narratively relevant.'),
+            narrativeFunction: schemaString('Character function in the story, such as protagonist, antagonist, helper, witness, crowd, narrator, or comic contrast.'),
+            emotionalState: schemaString('Dominant emotional state at first appearance or current major story state.'),
+            emotionalArc: schemaString('Concise emotional change across the script, grounded in plot beats.'),
+            relatedSceneIds: schemaStringArray('sceneIds where this character appears or is narratively relevant.')
+        });
+
+        const stage1PropSchema = schemaObject({
+            propId: schemaString('Stable prop ID, such as prop-001. Use consistently in plotBeats.relatedPropIds.'),
+            name: schemaString('Prop name or concise object label.'),
+            storyFunction: schemaString('Why this prop matters to the plot, ownership, reveal, action, joke, clue, or transformation.'),
+            relatedCharacterIds: schemaStringArray('characterIds connected to this prop through ownership, use, discovery, conflict, or dialogue.'),
+            relatedSceneIds: schemaStringArray('sceneIds where this prop appears or matters.')
+        });
+
+        const stage1PlotBeatSchema = schemaObject({
+            beatId: schemaString('Stable beat ID, such as beat-001. Dialogue/narration and downstream stages link to this ID.'),
+            order: schemaInteger('One-based story order of this beat.'),
+            summary: schemaString('Concise factual summary of what happens in this beat.'),
+            causality: schemaString('How this beat follows from previous beats and sets up later beats. Use story causality, not production notes.'),
+            relatedSceneIds: schemaStringArray('sceneIds involved in this beat.'),
+            relatedCharacterIds: schemaStringArray('characterIds involved in this beat.'),
+            relatedPropIds: schemaStringArray('propIds involved in this beat.')
+        });
+
+        const stage1DialogueNarrationSchema = schemaObject({
+            dialogueId: schemaString('Stable dialogue/narration ID, such as line-001.'),
+            beatId: schemaString('beatId where this line belongs.'),
+            type: { type: 'string', enum: ['dialogue', 'narration'], description: 'Use dialogue for spoken character lines; use narration for voice-over, narrator text, or internal monologue.' },
+            speaker: schemaString('Speaker name, character ID, or specific narrator/voice label. Do not leave narration as vague plain narrator when the voice identity is inferable.'),
+            text: schemaString('Exact dialogue or narration text from the script, preserving wording as much as possible.'),
+            relatedCharacterIds: schemaStringArray('characterIds directly speaking, being addressed, or narratively tied to this line.')
+        });
+
+        const STAGE1_RESPONSE_SCHEMA = schemaObject({
+            scenes: { type: 'array', items: stage1SceneSchema, description: 'Scene units separated by time, location, or narrative function.' },
+            characters: { type: 'array', items: stage1CharacterSchema, description: 'Characters and narratively important groups extracted from the script.' },
+            props: { type: 'array', items: stage1PropSchema, description: 'Plot-relevant props, objects, clues, devices, symbols, or items that change ownership/state.' },
+            plotBeats: { type: 'array', items: stage1PlotBeatSchema, description: 'Sequential plot beats preserving causality and story order.' },
+            dialogueNarration: { type: 'array', items: stage1DialogueNarrationSchema, description: 'Dialogue, voice-over, narration, and internal monologue linked to plot beats.' },
+            autoAssumptions: schemaStringArray('Concise assumptions used to resolve script ambiguities. Use an empty array if none were needed.')
+        });
+
+        const stage2VersionSchema = schemaLooseObject('Version description object for an asset. Include only story-relevant attributes such as appearance, state, clothing, location, trigger beats, persistence, or changed attributes.');
+
+        const stage2CharacterAssetSchema = schemaObject({
+            stableId: schemaString('Stable character asset ID used downstream.'),
+            sourceCharacterId: schemaString('Stage 1 characterId this asset comes from.'),
+            identityInvariants: schemaString('Attributes that must remain stable across shots and references.'),
+            baseVersion: stage2VersionSchema,
+            variationVersions: schemaArray(stage2VersionSchema, 'Story-driven character variations only; use an empty array when none are needed.')
+        });
+
+        const stage2SceneAssetSchema = schemaObject({
+            stableId: schemaString('Stable scene asset ID used downstream.'),
+            sourceSceneIds: schemaStringArray('Stage 1 sceneIds merged into this scene asset.'),
+            identityInvariants: schemaString('Location/environment attributes that must stay stable.'),
+            baseVersion: stage2VersionSchema,
+            variationVersions: schemaArray(stage2VersionSchema, 'Story-driven scene variations only; use an empty array when none are needed.')
+        });
+
+        const stage2PropAssetSchema = schemaObject({
+            stableId: schemaString('Stable prop asset ID used downstream.'),
+            sourcePropId: schemaString('Stage 1 propId this asset comes from.'),
+            identityInvariants: schemaString('Prop attributes that must remain stable.'),
+            baseVersion: stage2VersionSchema,
+            variationVersions: schemaArray(stage2VersionSchema, 'Story-driven prop variations only; use an empty array when none are needed.'),
+            ownershipOrLocationFlow: schemaString('How the prop ownership, use, or location changes through the story.')
+        });
+
+        const STAGE2_RESPONSE_SCHEMA = schemaObject({
+            assetBibleMeta: schemaObject({
+                overallStyle: schemaString('Concise overall visual style inferred from Stage 1 and user style input.'),
+                continuityGuidelines: schemaString('Global continuity guidance for identities, environments, props, and style.')
+            }),
+            characterAssets: schemaArray(stage2CharacterAssetSchema, 'Persistent tracked character assets.'),
+            sceneAssets: schemaArray(stage2SceneAssetSchema, 'Persistent tracked scene/location assets.'),
+            propAssets: schemaArray(stage2PropAssetSchema, 'Persistent tracked prop assets.'),
+            continuityRules: schemaStringArray('Strict continuity rules grounded in the story.'),
+            autoResolvedDecisions: schemaStringArray('Concise automatic decisions used to resolve asset-continuity ambiguities.')
+        });
+
+        const segmentStateSchema = schemaObject({
+            visualDescription: schemaString('Self-contained visual state description.'),
+            characterPosition: schemaString('Character/object position and spatial relationship in this state.'),
+            motionIntent: schemaString('Motion or edit intent for this state.')
+        });
+
+        const overlapStateSchema = schemaNullableObject({
+            overlapStateId: schemaString('Stable visual overlap ID shared by matching adjacent overlap states.'),
+            visualDescription: schemaString('Visual-only overlap handle. Do not describe sound.'),
+            durationSeconds: schemaNumber('Approximate overlap visual duration.'),
+            placement: schemaEnum(['entry', 'exit'], 'Whether this overlap belongs to segment entry or exit.'),
+            trimPolicy: schemaString('How editors may trim or cut this visual handle.')
+        }, 'Null when no visual overlap handle is needed; otherwise a visual-only overlap object.');
+
+        const audioClosureSchema = schemaObject({
+            startState: schemaString('Sound state at segment start.'),
+            peakOrChange: schemaString('Main sound change or peak inside this segment.'),
+            endState: schemaString('Sound state at segment end.'),
+            closureType: schemaString('How sound closes inside this segment, with no carry into adjacent clips.')
+        });
+
+        const stage3AppearingAssetSchema = schemaObject({
+            assetId: schemaString('Stage 2 stable asset ID appearing in this segment.'),
+            assetType: schemaString('Asset type, such as character, scene, prop, or group.'),
+            versionId: schemaString('Specific version/state ID or concise version label.'),
+            roleInSegment: schemaString('Narrative or visual role in this segment.'),
+            state: schemaString('Asset state in this segment.')
+        });
+
+        const stage3ShotSchema = schemaObject({
+            shotId: schemaString('Stable shot ID within the segment.'),
+            order: schemaInteger('One-based shot order within the segment.'),
+            purpose: schemaString('Narrative purpose of the shot.'),
+            framing: schemaString('Framing or composition intent.'),
+            cameraMotion: schemaString('Camera motion or stillness intent.'),
+            action: schemaString('Action and performance inside the shot.'),
+            assetVersionIds: schemaStringArray('Asset version IDs or labels used in this shot.'),
+            continuityNotes: schemaString('Continuity notes for this shot.'),
+            transitionIn: schemaString('How the shot begins inside this segment.'),
+            transitionOut: schemaString('How the shot ends inside this segment.')
+        });
+
+        const stage3DialogueNarrationSchema = schemaObject({
+            type: schemaEnum(['dialogue', 'narration'], 'dialogue for spoken lines; narration for voice-over/internal narrator.'),
+            speaker: schemaString('Specific speaker or narration voice label.'),
+            text: schemaString('Exact line text from Stage 1.')
+        });
+
+        const stage3SegmentSchema = schemaObject({
+            segmentId: schemaString('Stable segment ID.'),
+            order: schemaInteger('One-based segment order.'),
+            estimatedDurationSeconds: schemaNumber('Estimated duration, normally 5-15 seconds.'),
+            coveredBeatIds: schemaStringArray('Stage 1 beatIds covered by this segment.'),
+            narrativeGoal: schemaString('Narrative goal of this segment.'),
+            storyStateStart: schemaString('Story/visual state at segment start.'),
+            storyStateEnd: schemaString('Story/visual state at segment end.'),
+            pacingMode: schemaEnum(['settled', 'continuous', 'rapid_dialogue', 'action', 'comedy', 'suspense', 'impact_cut', 'transition_bridge'], 'Segment pacing mode.'),
+            boundaryStyle: schemaEnum(['hold_to_cut', 'match_on_action', 'eyeline_match', 'reaction_cut', 'hard_impact_cut', 'transition_bridge', 'clean_cut'], 'Visual boundary style; never use audio carry.'),
+            entryState: segmentStateSchema,
+            exitState: segmentStateSchema,
+            entryOverlapState: overlapStateSchema,
+            exitOverlapState: overlapStateSchema,
+            audioClosure: audioClosureSchema,
+            dialogueCompletion: schemaEnum(['complete', 'interrupted', 'none'], 'How dialogue completes in the segment.'),
+            actionCompletion: schemaEnum(['complete', 'interrupted', 'impact_cut', 'none'], 'How action completes in the segment.'),
+            appearingAssets: schemaArray(stage3AppearingAssetSchema, 'Assets appearing in this segment.'),
+            shots: schemaArray(stage3ShotSchema, 'Shot plan inside this segment.'),
+            dialogueNarration: schemaArray(stage3DialogueNarrationSchema, 'Dialogue and narration lines in this segment.'),
+            audioNeeds: schemaString('Segment sound requirements without background music or cross-segment carry.'),
+            assetUsageAnalysis: schemaString('Why the selected assets matter in this segment.'),
+            planningNotes: schemaString('Concise automatic planning notes.')
+        });
+
+        const STAGE3_RESPONSE_SCHEMA = schemaObject({
+            segmentPlanMeta: schemaObject({
+                totalEstimatedDurationSeconds: schemaNumber('Sum of segment durations.'),
+                targetDurationRange: schemaString('Target duration range from Stage 1 input.'),
+                pacingStrategy: schemaString('Overall pacing strategy.'),
+                segmentCount: schemaInteger('Must equal segments.length.'),
+                outputLanguage: schemaString('Natural language output language.')
+            }),
+            segments: schemaArray(stage3SegmentSchema, 'Video segment planning units.'),
+            continuityChecks: schemaStringArray('Continuity checks handled by automatic planning.'),
+            autoResolvedDecisions: schemaStringArray('Automatic planning decisions and assumptions.')
+        });
+
+        const referenceImageTypeSchema = schemaObject({
+            typeId: schemaString('Allowed reference image type ID.'),
+            label: schemaString('Chinese label for this reference type.'),
+            targetAssetTypes: schemaStringArray('Asset types this reference type can target.'),
+            purpose: schemaString('Why this reference type exists.'),
+            visualRequirements: schemaString('Visual requirements for this reference type.'),
+            coverageRequirements: schemaStringArray('Coverage requirements Stage 5 prompts must satisfy.'),
+            downstreamUse: schemaString('How Stage 6 should use this reference type.')
+        });
+
+        const stage4DecisionSchema = schemaObject({
+            assetId: schemaString('Stable Stage 2 asset ID.'),
+            assetType: schemaString('Asset type such as character, scene, prop, or group.'),
+            sourceAssetId: schemaString('Original source asset ID from Stage 1/2.'),
+            recommendedMethod: schemaEnum(['reuse', 'textToImage', 'imageToImage', 'edit', 'mixed', 'noReference'], 'Reference generation method.'),
+            requiredReferenceTypes: schemaStringArray('Allowed reference type IDs to generate for this asset.'),
+            rationale: schemaString('Reason for this reference decision.'),
+            dependencies: schemaStringArray('Asset IDs this reference depends on.'),
+            usedInSegments: schemaStringArray('Segment IDs where this asset appears or matters.'),
+            reusePolicy: schemaString('How to reuse this reference downstream.'),
+            automaticDecisionNotes: schemaString('Concise automatic notes about this decision.')
+        });
+
+        const stage4DependencySchema = schemaObject({
+            order: schemaInteger('One-based dependency order.'),
+            assetId: schemaString('Asset ID to generate or prepare.'),
+            dependsOn: schemaStringArray('Asset IDs that should be prepared before this one.'),
+            reason: schemaString('Reason for this dependency order.')
+        });
+
+        const omittedAssetSchema = schemaObject({
+            assetId: schemaString('Asset ID omitted from generated references.'),
+            assetType: schemaString('Asset type.'),
+            usedInSegments: schemaStringArray('Segment IDs where this omitted asset is used.'),
+            omissionReason: schemaString('Why this asset does not need its own reference image.'),
+            textPromptInstruction: schemaString('Natural-language visual instruction Stage 6 can copy into video prompts.')
+        });
+
+        const STAGE4_RESPONSE_SCHEMA = schemaObject({
+            referencePlanMeta: schemaObject({
+                planSummary: schemaString('Concise summary of the minimal reference image plan.'),
+                outputLanguage: schemaString('Natural language output language.'),
+                planningScope: schemaString('What this plan covers and excludes.'),
+                assetCoverageSummary: schemaString('Summary of generated vs omitted asset coverage.'),
+                stageBoundary: schemaString('Boundary reminder that this is planning only.'),
+                referenceBudget: schemaString('Concise budget/rationale for keeping references minimal.')
+            }),
+            assetReferenceDecisions: schemaArray(stage4DecisionSchema, 'One decision per relevant asset.'),
+            referenceImageTypes: schemaArray(referenceImageTypeSchema, 'Allowed reference image type definitions.'),
+            dependencyOrder: schemaArray(stage4DependencySchema, 'Generation dependency order for selected references.'),
+            continuityRisks: schemaStringArray('Continuity risks handled by automatic decisions.'),
+            omittedAssets: schemaArray(omittedAssetSchema, 'Assets carried as text-only instructions.'),
+            autoResolvedDecisions: schemaStringArray('Automatic reference-planning decisions and assumptions.')
+        });
+
+        const stage5BatchItemSchema = schemaObject({
+            queueId: schemaString('Must match the input batch queueId exactly.'),
+            promptText: schemaString('English GPT-Image-2 still-image prompt for this reference item.'),
+            negativeConstraints: schemaStringArray('English negative constraints scoped to this image prompt.'),
+            autoQualityChecks: schemaStringArray('Chinese quality checks for reviewing this prompt.'),
+            dependencyNotes: schemaString('Chinese notes explaining how dependencies should be used, or an empty string if none.')
+        });
+
+        const STAGE5_BATCH_RESPONSE_SCHEMA = schemaObject({
+            batchId: schemaInteger('Current Stage 5 batch number.'),
+            items: schemaArray(stage5BatchItemSchema, 'Prompt items for exactly the input batch queueIds.')
+        });
+
+        const referenceImageManifestItemSchema = schemaObject({
+            queueId: schemaString('Stage 5 prompt queue ID.'),
+            assetId: schemaString('Referenced asset ID.'),
+            assetType: schemaString('Asset type.'),
+            referenceTypeId: schemaString('Reference image type ID.'),
+            displayName: schemaString('Display name such as @图片1.'),
+            imageSlotNumber: schemaInteger('Positive image slot number.'),
+            imageHandle: schemaString('Seedance handle such as @图片1.'),
+            sourcePromptQueueId: schemaString('Original Stage 5 queue ID.'),
+            generatedImageStatus: schemaString('Reference image status.'),
+            imageUri: schemaString('Optional image URI or empty string.'),
+            usageRole: schemaString('How this image should be used.'),
+            seedanceUsageNotes: schemaString('Chinese usage notes for Seedance prompt writing.'),
+            dependsOnQueueIds: schemaStringArray('Referenced queue IDs this image depends on.')
+        });
+
+        const stage6ReferencedImageSchema = schemaObject({
+            queueId: schemaString('Reference image queue ID.'),
+            imageHandle: schemaString('Seedance image handle such as @图片1.'),
+            usageRole: schemaString('Usage role in this segment.'),
+            usageInstruction: schemaString('Chinese instruction for anchoring this image in seedancePromptText.')
+        });
+
+        const segmentExecutionSchema = schemaObject({
+            pacingMode: schemaEnum(['settled', 'continuous', 'rapid_dialogue', 'action', 'comedy', 'suspense', 'impact_cut', 'transition_bridge'], 'Must match input boundaryPlan pacingMode.'),
+            boundaryStyle: schemaEnum(['hold_to_cut', 'match_on_action', 'eyeline_match', 'reaction_cut', 'hard_impact_cut', 'transition_bridge', 'clean_cut'], 'Must match input boundaryPlan boundaryStyle.'),
+            entryStateUsage: schemaString('How entryState is used inside the first time block.'),
+            exitStateUsage: schemaString('How exitState is used inside the final time block.'),
+            entryOverlapUsage: schemaString('How entry overlap visual state is handled, or why none is used.'),
+            exitOverlapUsage: schemaString('How exit overlap visual state is handled, or why none is used.'),
+            dialogueTiming: schemaString('How dialogue/narration is timed inside this segment.'),
+            motionCompletion: schemaString('How action/motion completes inside this segment.'),
+            audioClosureUsage: schemaString('How all sound closes inside this segment without crossing into adjacent clips.')
+        });
+
+        const stage6PromptItemSchema = schemaObject({
+            segmentId: schemaString('Stage 3 segment ID.'),
+            order: schemaInteger('One-based segment order.'),
+            durationSeconds: schemaNumber('Seedance duration clamped to 4-15 seconds.'),
+            coveredBeatIds: schemaStringArray('Stage 1 beat IDs covered by this segment.'),
+            referencedImages: schemaArray(stage6ReferencedImageSchema, 'Reference images used by this segment.'),
+            textOnlyAssets: schemaArray(omittedAssetSchema, 'Text-only assets assigned to this segment.'),
+            segmentExecution: segmentExecutionSchema,
+            seedancePromptText: schemaString('Final Chinese time-blocked Seedance prompt text.'),
+            continuityRules: schemaStringArray('Chinese continuity rules for this segment.'),
+            audioNotes: schemaStringArray('Chinese audio notes for this segment; no background music.'),
+            autoQualityChecks: schemaStringArray('Chinese checks for this generated segment prompt.')
+        });
+
+        const segmentImageMappingSchema = schemaObject({
+            segmentId: schemaString('Stage 3 segment ID.'),
+            referencedImageQueueIds: schemaStringArray('Queue IDs referenced by this segment.')
+        });
+
+        const STAGE6_RESPONSE_SCHEMA = schemaObject({
+            seedanceQueueMeta: schemaObject({
+                schemaVersion: schemaString('Must be seedance_lumenflow_v1.'),
+                promptStyle: schemaString('Must be lumenflow_time_blocked_directing_prompt.'),
+                jobId: schemaString('Stable job ID.'),
+                scenarioName: schemaString('Scenario name.'),
+                description: schemaString('Chinese description of this queue.'),
+                totalSegments: schemaInteger('Total number of segments in this batch output context.'),
+                totalDurationSeconds: schemaNumber('Total duration represented by this output.'),
+                outputLanguage: schemaString('Must be zh-CN.'),
+                subtitlePolicy: schemaString('Must be no_subtitles_or_visible_text.'),
+                pacingStrategy: schemaString('Chinese pacing strategy summary.')
+            }),
+            referenceImageManifest: schemaArray(referenceImageManifestItemSchema, 'Reference image manifest copied from input.'),
+            videoPromptItems: schemaArray(stage6PromptItemSchema, 'Seedance prompt items.'),
+            segmentImageMapping: schemaArray(segmentImageMappingSchema, 'Mapping from segments to reference image queue IDs.'),
+            omittedAssets: schemaArray(omittedAssetSchema, 'Text-only assets copied from Stage 5.'),
+            autoQualityChecks: schemaStringArray('Global Chinese quality checks.'),
+            autoResolvedDecisions: schemaStringArray('Automatic decisions and assumptions made by Stage 6.')
+        });
+
         const STAGE3_PACING_MODES = [
             'settled', 'continuous', 'rapid_dialogue', 'action', 'comedy', 'suspense', 'impact_cut', 'transition_bridge'
         ];
@@ -2381,7 +2745,7 @@
             }
         }
 
-        async function callGemini(promptText) {
+        async function callGemini(promptText, responseSchema = null) {
             if (!apiKey) {
                 showApiModal();
                 throw new Error('请先设置 API Key');
@@ -2389,6 +2753,10 @@
 
             const maxAttempts = 5;
             let lastError = null;
+            const generationConfig = {
+                responseMimeType: "application/json"
+            };
+            if (responseSchema) generationConfig.responseSchema = responseSchema;
 
             for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
                 let response;
@@ -2404,9 +2772,7 @@
                                 role: 'user',
                                 parts: [{ text: promptText }]
                             }],
-                            generationConfig: {
-                                responseMimeType: "application/json"
-                            }
+                            generationConfig
                         })
                     });
                 } catch (err) {
@@ -2471,21 +2837,18 @@ Your goal is to turn the raw script into structured narrative facts for downstre
 6. Assign dialogue and narration to specific beats and characters.
 7. Resolve ambiguities internally and record concise automatic assumptions; never stop for human questions.
 
-### Field Semantics & Structure
-You MUST output ONLY valid JSON containing exactly these top-level keys:
-- scenes: Array of scene objects. Include stable IDs, time/location, visualStyleCues, and storyPurpose.
-- characters: Array of character objects. Include stable IDs, firstAppearanceBeatId, narrativeFunction, emotionalState/arc, and relatedSceneIds.
-- props: Array of prop objects. Include stable IDs, storyFunction, relatedCharacterIds, and relatedSceneIds.
-- plotBeats: Array of beat objects. Include stable IDs, causality (how it connects to previous/next beats), relatedSceneIds, relatedCharacterIds, and relatedPropIds.
-- dialogueNarration: Array of dialogue objects. Link them to specific beat IDs and character IDs.
-- autoAssumptions: Array of strings recording automatic assumptions used to resolve script ambiguities. Use an empty array if none were needed.
+### Output Contract
+- The API response schema controls the exact JSON shape, required fields, and field-level semantics. Follow the schema descriptions precisely.
+- Use stable IDs consistently across scenes, characters, props, plot beats, and dialogue/narration links.
+- Preserve cross-field relationships: plot beats must reference the correct scenes/characters/props, and dialogue/narration must link to the correct beat and speaker.
+- Use empty arrays when a relationship is not present; do not invent unrelated relationships just to fill arrays.
 
 ### Question Handling & Language
 - All natural-language fields MUST use ${s1Lang.value} as the output language.
 - Automation is ALWAYS ON: resolve ambiguities internally with reasonable assumptions grounded in the script. Record those assumptions in 'autoAssumptions'. Do not ask the user questions and do not emit blocking issues.
 
 ### Boundary Constraints
-Do not generate asset versions, image/video prompts, or production plans. Output only the narrative facts in JSON format.
+Do not generate asset versions, image/video prompts, shot plans, camera directions, or production plans. Output only the narrative facts in JSON format.
 
 Script:
 ${script}
@@ -2497,7 +2860,7 @@ Language: ${s1Lang.value}
 `;
 
             try {
-                const resultText = await callGemini(prompt);
+                const resultText = await callGemini(prompt, STAGE1_RESPONSE_SCHEMA);
                 if (!isCurrentPipelineRun(runToken)) return;
 
                 // Validate JSON
@@ -2590,14 +2953,11 @@ Your goal is to convert Stage 1 narrative facts into an asset canon and continui
 5. Write explicit continuity rules to prevent hallucination or inconsistency across shots.
 6. Resolve asset-continuity ambiguities automatically and record concise automatic decisions.
 
-### Field Semantics & Structure
-You MUST output ONLY valid JSON containing exactly these top-level keys:
-- assetBibleMeta: Object containing overall style and continuity guidelines.
-- characterAssets: Array of character asset objects. Include stableId, sourceCharacterId, identityInvariants (what never changes), baseVersion, and variationVersions (include triggerBeatIds, changedAttributes, and persistence).
-- sceneAssets: Array of scene asset objects. Include stableId, sourceSceneIds, identityInvariants, baseVersion, and variationVersions.
-- propAssets: Array of prop asset objects. Include stableId, sourcePropId, identityInvariants, baseVersion, variationVersions, and ownershipOrLocationFlow.
-- continuityRules: Array of strings defining strict rules and continuityRisks (e.g., "The necklace must always be silver, never gold").
-- autoResolvedDecisions: Array of strings recording automatic asset-continuity decisions and assumptions. Use an empty array if none were needed.
+### Output Contract
+- The API response schema controls the exact JSON shape, required fields, and field-level semantics. Follow the schema descriptions precisely.
+- Keep stable asset IDs consistent with Stage 1 source IDs and downstream references.
+- Only create story-driven variation versions; do not turn temporary expressions, one-off poses, or minor actions into persistent asset versions.
+- Continuity rules must be grounded in Stage 1 facts and usable by later reference-image and video-prompt stages.
 
 ### Question Handling & Language
 - All natural-language fields MUST use ${s1Lang.value} as the output language.
@@ -2611,7 +2971,7 @@ ${JSON.stringify(projectData.stage1)}
 `;
 
             try {
-                const resultText = await callGemini(prompt);
+                const resultText = await callGemini(prompt, STAGE2_RESPONSE_SCHEMA);
                 if (!isCurrentPipelineRun(runToken)) return;
 
                 // Validate JSON
@@ -2677,14 +3037,10 @@ ${validationError}
 
 请基于同一任务完整修复 JSON。必须只输出一个合法 JSON 对象，不要输出 Markdown，不要解释。
 重点要求：
-- 顶层键必须严格为 segmentPlanMeta, segments, continuityChecks, autoResolvedDecisions。
-- 每个 segment 必须包含 pacingMode, boundaryStyle, entryState, exitState, entryOverlapState, exitOverlapState, audioClosure, dialogueCompletion, actionCompletion。
-- pacingMode 只能使用 settled, continuous, rapid_dialogue, action, comedy, suspense, impact_cut, transition_bridge。
-- boundaryStyle 只能使用 hold_to_cut, match_on_action, eyeline_match, reaction_cut, hard_impact_cut, transition_bridge, clean_cut；不要输出 audio_carry、motion_carry 等未允许值。
-- entryState/exitState 必须各包含 visualDescription, characterPosition, motionIntent。
-- entryOverlapState/exitOverlapState 必须是 null 或包含 overlapStateId, visualDescription, durationSeconds, placement, trimPolicy 的视觉对象；overlap 只能描述画面，不描述声音。
-- audioClosure 必须包含 startState, peakOrChange, endState, closureType，并明确声音在本段内衰减、停止、收束、静默或闭合。
-- dialogueCompletion 只能使用 complete, interrupted, none；actionCompletion 只能使用 complete, interrupted, impact_cut, none。
+- response schema 控制 JSON 顶层结构、segment 必填字段、枚举值、nullable overlap 对象和字段语义；必须严格按 schema 修复。
+- pacingMode 与 boundaryStyle 必须匹配真实节奏；不要输出 audio_carry、motion_carry 等 schema 外值。
+- entryOverlapState/exitOverlapState 只能描述视觉，不描述声音。
+- audioClosure 必须明确声音在本段内衰减、停止、收束、静默或闭合。
 - dialogueNarration 中 type=narration 的 speaker 不能偷懒只写“旁白”；如果能从 Stage 2 或声音语境判断声音身份，必须写成“旁白（成年白然 VO）”“旁白（白然内心独白）”或“旁白（低沉磁性内心独白）”这类具体标签。
 - audioNeeds 不允许任何背景音乐、配乐、BGM、旋律或音乐性铺底；只允许环境声、动作音效、拟声词、魔法/光效声、人声、台词/旁白、空间回声和必要静默；不要写声音承接、声桥、尾音带入、持续到下一段。
 - 不要输出 referencePrompt、promptQueue、imagePrompt、videoPrompt、seedancePrompt 或任何最终生成提示词字段。
@@ -2729,24 +3085,13 @@ Your goal is to convert Stage 1 narrative facts and Stage 2 asset bible into 5-1
 9. Carry over dialogue and narration. For narration/VO, preserve or infer a specific speaker label instead of plain “旁白” whenever possible, such as “旁白（成年白然 VO）” or “旁白（低沉磁性内心独白）”; use Stage 2 autoResolvedDecisions and audio/voice clues to keep this stable. Design audio needs and audioClosure with NO background music, score, soundtrack, BGM, melody, or musical cues; allow environment sound, foley, action sound effects, magical sound effects, crowd noise, voice, dialogue/narration, room tone, and intentional silence. Every sound must start/change/decay/stop inside the same segment.
 10. Identify continuity checks and automatic planning decisions; never emit upstream issues that require human handling.
 
-### Field Semantics & Structure
-You MUST output ONLY valid JSON containing exactly these top-level keys:
-- segmentPlanMeta: Object containing totalEstimatedDurationSeconds, targetDurationRange, pacingStrategy, segmentCount, outputLanguage.
-- segments: Array of segment objects. Include segmentId, order, estimatedDurationSeconds, coveredBeatIds, narrativeGoal, storyStateStart, storyStateEnd, pacingMode, boundaryStyle, entryState, exitState, entryOverlapState, exitOverlapState, audioClosure, dialogueCompletion, actionCompletion, appearingAssets, shots, dialogueNarration, audioNeeds, assetUsageAnalysis, planningNotes.
-  - appearingAssets: Array of objects with assetId, assetType, versionId, roleInSegment, state.
-  - shots: Array of objects with shotId, order, purpose, framing, cameraMotion, action, assetVersionIds, continuityNotes, transitionIn, transitionOut.
-  - pacingMode: One of settled, continuous, rapid_dialogue, action, comedy, suspense, impact_cut, transition_bridge. Choose rapid_dialogue for arguments/抢话/fast back-and-forth; action for fights/chases/physical motion; comedy for laugh beats/reaction chains; impact_cut for deliberate shock/cliff cuts; transition_bridge for time/space/consciousness transitions; settled for emotional/information scenes that need a clean landing; continuous for ordinary motion or ritual flow.
-  - boundaryStyle: One of hold_to_cut, match_on_action, eyeline_match, reaction_cut, hard_impact_cut, transition_bridge, clean_cut. Do NOT output audio_carry. Do NOT default to hold_to_cut for fast scenes. Match it to pacingMode: settled/suspense need a landing-capable style, transition_bridge needs transition_bridge or clean_cut, rapid_dialogue/action/comedy/impact_cut need controlled visual cut points.
-  - entryState: Object with visualDescription, characterPosition, motionIntent. It describes the self-contained visual opening state of this segment.
-  - exitState: Object with visualDescription, characterPosition, motionIntent. It describes the self-contained visual ending state of this segment.
-  - entryOverlapState and exitOverlapState: Each is either null or an object with overlapStateId, visualDescription, durationSeconds, placement, trimPolicy. These are visual-only handles for editing independent clips. If two adjacent segments should meet on the same visual state, give both states the same overlapStateId and the same visualDescription. Example: seg-002 exits into full-frame overexposed pure white light; seg-003 begins with the same full-frame overexposed pure white light before changing inside seg-003.
-  - audioClosure: Object with startState, peakOrChange, endState, closureType. It must describe how sound appears, changes, decays, and stops inside this segment only.
-  - dialogueCompletion: One of complete, interrupted, none. Do not use overlaps_next.
-  - actionCompletion: One of complete, interrupted, impact_cut, none. Do not use continues_next.
-  - dialogueNarration: Array of objects with exactly type, speaker, text. type must be dialogue or narration. For dialogue, speaker is the speaking character name. For narration, speaker must include the voice identity or vocal quality in Chinese parentheses whenever known or inferable, for example “旁白（成年白然 VO）”, “旁白（白然内心独白）”, or “旁白（低沉磁性内心独白）”; do not output plain “旁白” when Stage 2 or audio context reveals who/what voice it is. text must preserve the original dialogue/narration wording exactly, without paraphrase. Use an empty array if the segment has no spoken line or narration.
-  - audioNeeds: A single Chinese string describing this segment's sound requirements without any background music, score, soundtrack, BGM, melody, or musical cues. Allow only environment sound, foley, action sound effects, magical sound effects, crowd noise, voice, dialogue/narration, room tone, and intentional silence. Do not output an object or array. Do not say any sound continues to another segment.
-- continuityChecks: Array of strings for continuity checks.
-- autoResolvedDecisions: Array of strings recording automatic segment-planning assumptions and decisions.
+### Output Contract
+- The API response schema controls the exact JSON shape, required fields, enum values, nullable overlap states, and field-level semantics. Follow the schema descriptions precisely.
+- pacingMode and boundaryStyle must match the segment's real dramatic rhythm; do not invent values outside the schema.
+- entryOverlapState and exitOverlapState are visual-only handles. If adjacent segments should share an overlap, give both the same overlapStateId and visualDescription; never describe sound in overlap states.
+- For narration/VO, speaker must include the voice identity or vocal quality in Chinese parentheses whenever known or inferable; do not output plain “旁白” when Stage 2 or audio context reveals who/what voice it is.
+- dialogueNarration.text must preserve the original dialogue/narration wording exactly, without paraphrase.
+- audioNeeds and audioClosure must describe only segment-local sound with no background music and no next/previous segment dependency.
 
 ### Pacing & Boundary Rules
 - Do not mechanically slow every segment. The correct boundary depends on pacingMode.
@@ -2783,7 +3128,7 @@ ${JSON.stringify(projectData.stage2)}
                     if (attempt > 1) {
                         s3Status.textContent = `Repair ${attempt - 1}`;
                     }
-                    const resultText = await callGemini(currentPrompt);
+                    const resultText = await callGemini(currentPrompt, STAGE3_RESPONSE_SCHEMA);
                     if (!isCurrentPipelineRun(runToken)) return;
 
                     try {
@@ -2904,15 +3249,12 @@ For assetReferenceDecisions[].recommendedMethod, use exactly one of these string
 
 In this pipeline, most generated references should use textToImage, and omitted assets should use noReference. Do not invent values such as generate, create, newReference, referenceImage, textOnly, skip, omit, or auto.
 
-### Output Structure
-You MUST output ONLY valid JSON with exactly these top-level keys:
-- referencePlanMeta: Object containing planSummary, outputLanguage, planningScope, assetCoverageSummary, stageBoundary, referenceBudget.
-- assetReferenceDecisions: Array. Each object must include assetId, assetType, sourceAssetId, recommendedMethod, requiredReferenceTypes, rationale, dependencies, usedInSegments, reusePolicy, automaticDecisionNotes.
-- referenceImageTypes: Array. Use the allowed reference types above only; do not invent extra typeIds.
-- dependencyOrder: Array. Only include assets that actually generate references.
-- continuityRisks: Array of Chinese strings describing risks that were handled by automatic decisions.
-- omittedAssets: Array. Each object must include assetId, assetType, usedInSegments, omissionReason, textPromptInstruction.
-- autoResolvedDecisions: Array of Chinese strings recording assumptions and automatic decisions.
+### Output Contract
+- The API response schema controls the exact JSON shape, required fields, and field-level semantics. Follow the schema descriptions precisely.
+- referenceImageTypes must use only the allowed typeIds above; do not invent extra typeIds.
+- dependencyOrder should include only assets that actually generate references.
+- omittedAssets must give Stage 6 copy-ready textPromptInstruction for every visible asset that should not receive a reference image.
+- Record ambiguity resolutions in autoResolvedDecisions instead of asking questions or emitting blocking issues.
 
 ### Selection Policy Examples
 - Main recurring character in close-up: character_base_sheet.
@@ -2933,7 +3275,7 @@ ${JSON.stringify(projectData.stage3, null, 2)}
 Remember: output exactly one JSON object. Do not include Markdown fences, explanatory prose outside JSON, final GPT-Image-2 prompts, Seedance prompts, model-specific prompt strings, generation parameters, or real generation instructions.`;
 
             try {
-                const resultText = await callGemini(prompt);
+                const resultText = await callGemini(prompt, STAGE4_RESPONSE_SCHEMA);
                 if (!isCurrentPipelineRun(runToken)) return;
                 let parsedJson;
                 try {
@@ -3184,20 +3526,12 @@ The page will reject your JSON unless the relevant promptText contains these exa
 - If referenceTypeId is 'prop_closeup_reference', state near the start that it is a single prop close-up studio reference on a pure white studio background by default. If pure white reduces readability for transparent, translucent, glowing, reflective, pale, or white props, use neutral gray, black, or another single flat studio color.
 - If dependsOnQueueIds is not empty, dependencyNotes MUST literally include every queueId from dependsOnQueueIds.
 
-### Output Format
-You MUST output ONLY valid JSON containing exactly this structure:
-{
-  "batchId": ${batchInfo.current},
-  "items": [
-    {
-      "queueId": "MUST match the queueId from the input batch exactly",
-      "promptText": "The English GPT-Image-2 prompt following the guidance above",
-      "negativeConstraints": ["English negative constraint 1", "English negative constraint 2"],
-      "autoQualityChecks": ["Chinese automatic quality check 1", "Chinese automatic quality check 2"],
-      "dependencyNotes": "A single Chinese string on how to use dependencies, if any; never output an array or object"
-    }
-  ]
-}
+### Output Contract
+- The API response schema controls the exact JSON shape, required fields, and field-level semantics. Follow the schema descriptions precisely.
+- batchId must be ${batchInfo.current}.
+- items count and queueId values must match the input batch exactly; do not add, remove, rename, or reorder batch items.
+- promptText must be an English still-image prompt following all reference-type rules above.
+- dependencyNotes must be one Chinese string; if dependsOnQueueIds is not empty, it must literally include every dependency queueId.
 
 Remember: output exactly one JSON object. Do not include Markdown fences or explanatory prose outside JSON.`;
         }
@@ -3356,7 +3690,7 @@ ${validationError}
 
 请基于同一个 batch 完整修复 JSON。必须只输出一个合法 JSON 对象，不要输出 Markdown，不要解释。
 重点要求：
-- 保留顶层结构：{"batchId": number, "items": [...]}。
+- response schema 控制顶层结构、items 字段和字段语义；必须严格按 schema 修复。
 - items 数量、queueId 必须与输入 batch 完全一致，不要新增、删除或改名。
 - promptText 必须是英文静态图提示词，不要写视频、镜头运动、时长、API 参数。
 - character_base_sheet 必须包含 2:1、左半边大头特写、右半边 2x2 四宫格全身 front/left/back/right。
@@ -3379,7 +3713,7 @@ ${invalidJson}`;
                     onProgress({ current: batchNumber, total: null, repairAttempt: attempt - 1 });
                 }
 
-                const resultText = await callGemini(currentPrompt);
+                const resultText = await callGemini(currentPrompt, STAGE5_BATCH_RESPONSE_SCHEMA);
                 let parsedJson;
                 try {
                     parsedJson = JSON.parse(resultText);
@@ -3702,20 +4036,20 @@ ${JSON.stringify(lumenflowStructureExamples, null, 2)}
 声音补充（可选）：如果时间块声音还不够清楚，可补充 audioNeedsForSeedance 和 audioClosure，只保留环境声、动作音效、拟声词、魔法/光效声、人声、台词/旁白、空间回声和必要静默；所有声音都必须在本段内闭合；不允许任何背景音乐、配乐、BGM、旋律或音乐性铺底。
 其他需求：全程保持角色身份、服装、道具细节和场景空间关系一致。面部五官清晰稳定不变形，同一角色全程外貌一致，人体/角色结构正常比例自然，动作连续自然不跳帧，无模糊无重影，无字幕无文字，无背景音乐。
 
-### 输出结构
-你必须只输出一个合法 JSON 对象，顶层键必须严格为：seedanceQueueMeta, referenceImageManifest, videoPromptItems, segmentImageMapping, omittedAssets, autoQualityChecks, autoResolvedDecisions。
+### 输出契约
+response schema 控制 JSON 顶层结构、必填字段、数组项结构和字段语义；必须严格按 schema 输出一个合法 JSON 对象，不要输出 Markdown 或解释。
 
-seedanceQueueMeta 必须包含：schemaVersion, promptStyle, jobId, scenarioName, description, totalSegments, totalDurationSeconds, outputLanguage, subtitlePolicy, pacingStrategy。其中 schemaVersion 必须是 "seedance_lumenflow_v1"，promptStyle 必须是 "lumenflow_time_blocked_directing_prompt"，subtitlePolicy 必须是 "no_subtitles_or_visible_text"。
+seedanceQueueMeta 的固定策略值必须保持：schemaVersion = "seedance_lumenflow_v1"，promptStyle = "lumenflow_time_blocked_directing_prompt"，subtitlePolicy = "no_subtitles_or_visible_text"。
 
-videoPromptItems 每项必须包含：segmentId, order, durationSeconds, coveredBeatIds, referencedImages, textOnlyAssets, segmentExecution, seedancePromptText, continuityRules, audioNotes, autoQualityChecks。seedancePromptText 不按固定字数凑长度；必须按段落复杂度写到足够可执行为止。简单空镜、无对白广告、短转场可更短；多角色强对话、复杂动作、多个参考图、文本资产较多或过渡状态较多的段落可更长。无论长短，都不能只是剧情概要，必须具备画面、运镜、声音和过渡闭合控制。
+seedancePromptText 不按固定字数凑长度；必须按段落复杂度写到足够可执行为止。简单空镜、无对白广告、短转场可更短；多角色强对话、复杂动作、多个参考图、文本资产较多或过渡状态较多的段落可更长。无论长短，都不能只是剧情概要，必须具备画面、运镜、声音和过渡闭合控制。
 
 textOnlyAssets 只能从“每段可选参考图候选”中对应 segment 的 textOnlyAssets 复制；如果该段 textOnlyAssets 为空，必须输出空数组，不要根据全局“未生成参考图的文本资产”自行分配到其他段。每项必须完整保留输入候选中的 assetId, assetType, usedInSegments, omissionReason, textPromptInstruction；不要只输出 assetId 或一句说明。
 
-segmentImageMapping 必须是数组，不是对象。数组每项必须包含 segmentId 和 referencedImageQueueIds，例如：[{'segmentId':'seg_01','referencedImageQueueIds':['img_scene_01_scene_establishing_reference']}]。注意实际输出必须使用合法 JSON 双引号。
+segmentImageMapping 必须是数组，不是对象，并且每段只列出实际用于该段的 referencedImageQueueIds。
 
-referencedImages 每项必须包含：queueId, imageHandle, usageRole, usageInstruction。
+referencedImages 只能引用该段已选参考图；每张参考图必须在 seedancePromptText 中用 @图片N 明确锚定。
 
-segmentExecution 必须是对象，包含：pacingMode, boundaryStyle, entryStateUsage, exitStateUsage, entryOverlapUsage, exitOverlapUsage, dialogueTiming, motionCompletion, audioClosureUsage。pacingMode 和 boundaryStyle 必须与输入 boundaryPlan 一致；entryOverlapUsage/exitOverlapUsage 只用于 JSON 元数据说明，不要把这些字段名写进 seedancePromptText；audioClosureUsage 必须说明声音如何在本段内闭合。
+segmentExecution 必须反映输入 boundaryPlan：pacingMode 和 boundaryStyle 与 boundaryPlan 一致；entryOverlapUsage/exitOverlapUsage 只用于 JSON 元数据说明，不要把这些字段名写进 seedancePromptText；audioClosureUsage 必须说明声音如何在本段内闭合。
 
 ### 输入：阶段 3 段落计划
 ${JSON.stringify(stage3ForStage6, null, 2)}
@@ -4318,11 +4652,11 @@ ${validationError}
 
 请基于同一任务完整修复 JSON。必须只输出一个合法 JSON 对象，不要输出 Markdown，不要解释。
 重点要求：
-- 保留顶层键：seedanceQueueMeta, referenceImageManifest, videoPromptItems, segmentImageMapping, omittedAssets, autoQualityChecks, autoResolvedDecisions。
+- response schema 控制顶层结构、数组项结构和字段语义；必须严格按 schema 修复。
 - 不要删除任何 segment；每个 Stage 3 segment 都必须有一个 videoPromptItems 项。
 - 每个 seedancePromptText 必须是可直接输入 Seedance 的导演提示词，不要写成剧情摘要；优先写足画面、运镜、声音、空间锚点和其他需求，但不要为了凑格式硬塞无意义长文。
 - 每段必须包含基本的画面、运镜、声音和无字幕无文字约束；不强制输出单独的“主体动作：”或“声音设计：”总标签，每个时间块写清动作和声音即可。
-- 每段必须输出 segmentExecution，并让 pacingMode/boundaryStyle 与输入 boundaryPlan 一致。
+- segmentExecution 的 pacingMode/boundaryStyle 必须与输入 boundaryPlan 一致。
 - 不要在 seedancePromptText 里输出独立“边界执行：”标签；开头过渡画面必须融入第一个时间块，结尾过渡画面必须融入最后一个时间块；不要在 seedancePromptText 里写 entryOverlapState、exitOverlapState、boundaryPlan 等内部字段名。
 - seedancePromptText 禁止出现上一段、前一段、下一段、后一段、承接、延续、带入、声音承接、声桥、尾音带入、跨切下一段、不引用上一段、不与上一段连续。
 - 时间块优先使用 [0-3s] 画面：格式；轻微格式偏差页面代码会归一，不要为格式牺牲可读性。
@@ -4416,7 +4750,7 @@ ${invalidJson}
                     const prefix = batchCount > 1 ? `第 ${batchIndex + 1}/${batchCount} 批 ` : '';
                     onProgress(attempt === 1 ? `${prefix}正在生成 Seedance 提示词队列...` : `${prefix}正在自动修复 Stage 6 输出（第 ${attempt - 1} 轮）...`);
                 }
-                const resultText = await callGemini(currentPrompt);
+                const resultText = await callGemini(currentPrompt, STAGE6_RESPONSE_SCHEMA);
                 try {
                     parsedJson = parseModelJsonObject(resultText, '阶段 6 API 返回的不是有效的 JSON 格式');
                 } catch (err) {
