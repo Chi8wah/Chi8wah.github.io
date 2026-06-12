@@ -833,7 +833,6 @@
                 type: 'object',
                 properties,
                 required,
-                additionalProperties: false,
                 propertyOrdering: Object.keys(properties)
             };
         }
@@ -863,7 +862,7 @@
         }
 
         function schemaLooseObject(description) {
-            return { type: 'object', additionalProperties: true, description };
+            return { type: 'object', description };
         }
 
         function schemaNullableObject(properties, description) {
