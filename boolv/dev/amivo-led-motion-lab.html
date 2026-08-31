@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>Amivo 跑道圆灯效实验台</title>
+  <style>
+    :root {
+      --bg: #080b13;
+      --panel: rgba(18, 23, 38, .76);
+      --panel-strong: rgba(22, 28, 45, .94);
+      --text: #f3f6ff;
+      --muted: #939db4;
+      --line: rgba(197, 211, 255, .11);
+      --hover: rgba(117, 140, 197, .1);
+      --active: rgba(75, 104, 255, .16);
+      --shadow: 0 28px 100px rgba(0, 0, 0, .34);
+      --cyan: #32d6ff;
+      --blue: #597bff;
+      --violet: #a56cff;
+      --orange: #ffb240;
+      --yellow: #ffd548;
+      --white: #f4f7ff;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { min-width: 320px; background: var(--bg); }
+    body {
+      margin: 0;
+      min-height: 100svh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 14% 3%, rgba(38, 215, 255, .11), transparent 31rem),
+        radial-gradient(circle at 90% 70%, rgba(181, 100, 255, .1), transparent 32rem),
+        var(--bg);
+      transition: color .35s ease, background .5s ease;
+    }
+    body.day {
+      --bg: #edf1f7;
+      --panel: rgba(255, 255, 255, .73);
+      --panel-strong: rgba(255, 255, 255, .92);
+      --text: #111827;
+      --muted: #687187;
+      --line: rgba(32, 48, 82, .11);
+      --hover: rgba(71, 96, 156, .07);
+      --active: rgba(73, 104, 255, .1);
+      --shadow: 0 28px 100px rgba(44, 65, 104, .13);
+      background:
+        radial-gradient(circle at 14% 3%, rgba(54, 166, 255, .16), transparent 31rem),
+        radial-gradient(circle at 90% 70%, rgba(181, 100, 255, .11), transparent 32rem),
+        var(--bg);
+    }
+    button, input { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    .shell { width: min(1380px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 34px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+    .brand { display: flex; align-items: center; gap: 11px; font-size: 14px; font-weight: 680; letter-spacing: -.01em; }
+    .brand-mark { width: 23px; height: 13px; border: 2px solid var(--cyan); border-radius: 999px; box-shadow: 0 0 18px rgba(38, 215, 255, .58); }
+    .subhead { margin: 5px 0 0 34px; color: var(--muted); font-size: 11px; letter-spacing: .04em; }
+    .header-note { display: flex; align-items: center; gap: 7px; min-height: 29px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--panel); backdrop-filter: blur(18px); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; letter-spacing: .08em; }
+    .header-note i { width: 6px; height: 6px; border-radius: 50%; background: #4be49b; box-shadow: 0 0 10px #4be49b; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(330px, .74fr); gap: 16px; align-items: start; }
+    .preview, .controls { border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); backdrop-filter: blur(30px) saturate(145%); }
+    .preview { min-height: 760px; border-radius: 30px; overflow: hidden; display: grid; grid-template-rows: auto minmax(470px, 1fr) auto; }
+    .preview-top { display: flex; align-items: center; justify-content: space-between; padding: 25px 27px 0; }
+    .kicker, .live, .section-title, .spec-chip, .timecode { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; letter-spacing: .08em; font-size: 10px; }
+    .kicker { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+    .kicker b { color: var(--mode-color, var(--cyan)); }
+    .live { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+    .live i { width: 6px; height: 6px; border-radius: 50%; background: #4be49b; box-shadow: 0 0 9px #4be49b; }
+    .stage { position: relative; min-height: 480px; }
+    canvas { display: block; width: 100%; height: 100%; min-height: 480px; }
+    .timecode { position: absolute; left: 26px; bottom: 18px; color: var(--muted); opacity: .7; }
+    .direction-hint { position: absolute; right: 26px; bottom: 18px; color: var(--muted); font-size: 11px; opacity: 0; transition: opacity .2s ease; }
+    .direction-hint.show { opacity: .75; }
+    .preview-bottom { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; padding: 0 27px 27px; }
+    .preview-bottom h1 { margin: 0; font-size: clamp(34px, 4vw, 54px); font-weight: 640; line-height: .98; letter-spacing: -.05em; }
+    .preview-bottom p { max-width: 650px; margin: 13px 0 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+    .replay { width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 13px; color: var(--text); background: rgba(255,255,255,.035); cursor: pointer; transition: transform .15s ease, background .15s ease; }
+    .replay:hover { background: var(--hover); }
+    .replay:active { transform: scale(.94) rotate(-18deg); }
+    .controls { max-height: calc(100svh - 104px); overflow: auto; border-radius: 24px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+    .section { padding: 21px; border-bottom: 1px solid var(--line); }
+    .section:last-child { border-bottom: 0; }
+    .section-title { margin: 0 0 13px; color: var(--muted); font-weight: 680; }
+    .mode-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .mode-button { display: grid; grid-template-columns: 20px 7px 1fr; align-items: center; gap: 8px; min-height: 41px; padding: 0 10px; border: 1px solid transparent; border-radius: 12px; color: var(--muted); background: transparent; text-align: left; cursor: pointer; transition: transform .13s ease, color .16s ease, background .16s ease, border-color .16s ease; }
+    .mode-button:hover { color: var(--text); background: var(--hover); }
+    .mode-button:active { transform: scale(.978); }
+    .mode-button.active { color: var(--text); border-color: var(--line); background: var(--active); }
+    .mode-button .num { font: 500 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; opacity: .62; }
+    .mode-button .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dot); box-shadow: 0 0 8px var(--dot); }
+    .mode-button .name { overflow: hidden; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+    .segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 12px; background: rgba(116, 137, 184, .09); }
+    .segmented button { min-height: 34px; border: 0; border-radius: 9px; color: var(--muted); background: transparent; font-size: 11px; cursor: pointer; }
+    .segmented button.active { color: var(--text); background: var(--panel-strong); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 17px; }
+    .toggle-copy { display: grid; gap: 3px; }
+    .toggle-copy strong { font-size: 12px; font-weight: 620; }
+    .toggle-copy small { color: var(--muted); font-size: 10px; }
+    .switch { position: relative; width: 35px; height: 20px; padding: 0; border: 0; border-radius: 999px; background: rgba(120,132,165,.33); cursor: pointer; transition: background .2s ease; }
+    .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.2); transition: transform .22s cubic-bezier(.2,.8,.2,1); }
+    .switch.on { background: var(--blue); }
+    .switch.on::after { transform: translateX(15px); }
+    .specs { display: flex; flex-wrap: wrap; gap: 7px; }
+    .spec-chip { min-height: 29px; display: inline-flex; align-items: center; padding: 0 9px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: rgba(255,255,255,.025); text-transform: none; letter-spacing: 0; font-size: 9px; }
+    .color-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+    .swatch { aspect-ratio: 1.4; border: 1px solid var(--line); border-radius: 10px; background: var(--swatch); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+    .footnote { margin: 0; padding: 17px 21px 20px; color: var(--muted); font-size: 9px; line-height: 1.6; }
+    @media (max-width: 900px) {
+      .workspace { grid-template-columns: 1fr; }
+      .controls { max-height: none; }
+      .preview { min-height: 690px; }
+    }
+    @media (max-width: 560px) {
+      .shell { width: min(100% - 20px, 1380px); padding-top: 16px; }
+      .header-note { display: none; }
+      .preview { min-height: 620px; border-radius: 22px; grid-template-rows: auto minmax(390px,1fr) auto; }
+      .preview-top { padding: 19px 18px 0; }
+      .stage, canvas { min-height: 390px; }
+      .preview-bottom { padding: 0 18px 20px; }
+      .preview-bottom h1 { font-size: 36px; }
+      .mode-list { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Amivo Motion Lab</span></div>
+        <p class="subhead">跑道圆发光区域 · 理想动画预览</p>
+      </div>
+      <div class="header-note"><i></i> Single-file prototype</div>
+    </header>
+
+    <main class="workspace">
+      <section class="preview" id="preview">
+        <div class="preview-top">
+          <div class="kicker"><b id="modeIndex">M08</b><span id="modeEyebrow">Audio mirror</span></div>
+          <div class="live"><i></i> Live preview</div>
+        </div>
+        <div class="stage">
+          <canvas id="canvas" aria-label="跑道圆灯效动画"></canvas>
+          <span class="timecode" id="timecode">00:00.000</span>
+          <span class="direction-hint" id="directionHint">↑ 向上拨动</span>
+        </div>
+        <div class="preview-bottom">
+          <div><h1 id="modeName">中心镜像声浪</h1><p id="modeSummary"></p></div>
+          <button class="replay" id="replay" type="button" aria-label="重新播放">↻</button>
+        </div>
+      </section>
+
+      <aside class="controls">
+        <section class="section">
+          <p class="section-title">动画模式 · M00–M12</p>
+          <div class="mode-list" id="modeList"></div>
+        </section>
+        <section class="section">
+          <p class="section-title">环境</p>
+          <div class="segmented" id="environment">
+            <button type="button" data-environment="day">日间</button>
+            <button type="button" data-environment="night" class="active">夜间</button>
+            <button type="button" data-environment="gallery">展厅</button>
+          </div>
+          <div class="toggle-row">
+            <span class="toggle-copy"><strong>低动态模式</strong><small>用静态与淡入淡出替代大范围运动</small></span>
+            <button class="switch" id="reducedMotion" type="button" role="switch" aria-checked="false" aria-label="低动态模式"></button>
+          </div>
+        </section>
+        <section class="section">
+          <p class="section-title">播放速度</p>
+          <div class="segmented" id="speed">
+            <button type="button" data-speed="0.5">0.5×</button>
+            <button type="button" data-speed="1" class="active">1×</button>
+            <button type="button" data-speed="2">2×</button>
+          </div>
+        </section>
+        <section class="section">
+          <p class="section-title">设计参数</p>
+          <div class="specs" id="specs"></div>
+        </section>
+        <section class="section">
+          <p class="section-title">颜色角色</p>
+          <div class="color-row">
+            <div class="swatch" style="--swatch:#32d6ff" title="Amivo 青"></div>
+            <div class="swatch" style="--swatch:#597bff" title="陪伴蓝"></div>
+            <div class="swatch" style="--swatch:#a56cff" title="温柔紫"></div>
+            <div class="swatch" style="--swatch:#ffb240" title="暖琥珀"></div>
+          </div>
+        </section>
+        <p class="footnote">模式优先的理想设计预览：中心圆形控件是摇杆 C，圆周标出 N/E/S/W。一次性模式会为演示自动重播；不模拟任何现有硬件或固件限制。</p>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const COLORS = {
+      cyan: [50, 214, 255], blue: [89, 123, 255], blueViolet: [118, 126, 255],
+      violet: [165, 108, 255], orange: [255, 178, 64], yellow: [255, 213, 72],
+      white: [242, 247, 255], green: [98, 223, 162], red: [255, 107, 99]
+    };
+    const modes = [
+      { code:'M00', id:'off', name:'无光', eyebrow:'Off', color:'#151b29', summary:'整圈无光。它是一个明确模式，而不是尚未加载或动画异常。', specs:['B00','100–180 ms 收束','可立即打断','无残留光'] },
+      { code:'M01', id:'steady', name:'常亮', eyebrow:'Steady', color:'#32d6ff', summary:'E/W 两个中心投影点形成左右完全对称的稳定短段。', specs:['CENTER_PAIR','B32','160–220 ms 淡入','左右光能差 <5%'] },
+      { code:'M02', id:'lowBreath', name:'低频呼吸', eyebrow:'Low breath', color:'#32d6ff', summary:'整圈缓慢、柔和地呼吸，谷值保留余光，不会闪到全灭。', specs:['2800 ms / 周期','B18 ↔ B38','谷值 ≥峰值 45%','下降略慢'] },
+      { code:'M03', id:'highBreath', name:'高频呼吸', eyebrow:'High breath', color:'#597bff', summary:'更积极的连续呼吸，用于表达正在尝试或等待，但仍不形成闪烁。', specs:['1150 ms / 周期','B22 ↔ B58','谷值 ≥峰值 35%','不长期驻留'] },
+      { code:'M04', id:'bloom', name:'中心镜像展开', eyebrow:'Center bloom', color:'#32d6ff', summary:'光从中心摇杆 C 投影到 E/W，再向 N/S 四路完全镜像展开与收回。', specs:['420 ms','E/W 双光种','四路镜像','可反向'] },
+      { code:'M05', id:'ripple', name:'中心镜像涟漪', eyebrow:'Center ripple', color:'#32d6ff', summary:'两枚光种从 E/W 同时产生四道短波，沿上下方向柔和远去。', specs:['520 ms','波前 6–10%','拖尾 8–12%','自动消散'] },
+      { code:'M06', id:'comet', name:'彗星拖尾', eyebrow:'Comet trail', color:'#597bff', summary:'一个青蓝光头沿完整跑道匀速环绕，拖尾连续衰减。', specs:['1650 ms / 圈','光头 3–5%','拖尾 18–22%','无接缝顿挫'] },
+      { code:'M07', id:'twinComet', name:'双彗星平衡轨道', eyebrow:'Twin comet', color:'#597bff', summary:'两个相差半圈的光头同向运行，保持左右光能平衡和从容节奏。', specs:['2100 ms / 圈','相差 180°','拖尾 10–14%','不反向对撞'] },
+      { code:'M08', id:'audioMirror', name:'中心镜像声浪', eyebrow:'Audio mirror', color:'#8b75ff', summary:'模拟 TTS 能量驱动 E/W 两侧光带同时向 N/S 四路伸缩；AI 回答永远不是单侧发光。', specs:['20 ms 能量更新','60–80 ms attack','200–240 ms release','四路镜像'] },
+      { code:'M09', id:'directional', name:'中心定向流', eyebrow:'Directional flow', color:'#f2f7ff', summary:'光从中心摇杆的 E/W 投影点出发，沿左右两侧向上或向下汇合。', specs:['220–320 ms','跟随手势方向','速度连续继承','无回弹'] },
+      { code:'M10', id:'progress', name:'对称进度环', eyebrow:'Symmetric progress', color:'#ffb240', summary:'进度从 E/W 同时向 N/S 四路填充，100% 时整圈闭合。', specs:['0–100%','220 ms 响应','可连续重定向','回退路径一致'] },
+      { code:'M11', id:'confirm', name:'单次确认脉冲', eyebrow:'Confirmation pulse', color:'#62dfa2', summary:'整圈快速聚亮后柔和回落，只播放一次，并保留下层模式相位。', specs:['560 ms','140 ms 上升','360 ms 回落','不闪黑'] },
+      { code:'M12', id:'doubleBeat', name:'双拍提醒', eyebrow:'Double beat', color:'#ff6b63', summary:'两次有间隔的柔和光拍；第二拍略强，拍间保留余光。', specs:['920 ms','两拍之间不全灭','默认单次','错误 / 重要提醒'] }
+    ];
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const modeList = document.getElementById('modeList');
+    const modeName = document.getElementById('modeName');
+    const modeSummary = document.getElementById('modeSummary');
+    const modeEyebrow = document.getElementById('modeEyebrow');
+    const modeIndex = document.getElementById('modeIndex');
+    const specs = document.getElementById('specs');
+    const timecode = document.getElementById('timecode');
+    const directionHint = document.getElementById('directionHint');
+    const preview = document.getElementById('preview');
+    let selected = 8;
+    let environment = 'night';
+    let reduced = false;
+    let playback = 1;
+    let startedAt = performance.now();
+    let animationFrame = 0;
+    let speakingLevel = .45;
+
+    function mix(a,b,t) { t=Math.max(0,Math.min(1,t)); return a.map((v,i)=>Math.round(v+(b[i]-v)*t)); }
+    function smoothstep(a,b,x) { const t=Math.max(0,Math.min(1,(x-a)/(b-a))); return t*t*(3-2*t); }
+    function circularDistance(a,b) { const d=Math.abs(a-b); return Math.min(d,1-d); }
+    function colorCss(c,a) { return `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0,Math.min(1,a))})`; }
+
+    function capsulePoint(p,cx,cy,r,straight) {
+      const total=2*straight+2*Math.PI*r; let d=((p%1)+1)%1*total;
+      if(d<=straight) return {x:cx+r,y:cy-straight/2+d};
+      d-=straight;
+      if(d<=Math.PI*r){const a=d/r;return{x:cx+Math.cos(a)*r,y:cy+straight/2+Math.sin(a)*r};}
+      d-=Math.PI*r;
+      if(d<=straight) return {x:cx-r,y:cy+straight/2-d};
+      d-=straight; const a=Math.PI+d/r; return{x:cx+Math.cos(a)*r,y:cy-straight/2+Math.sin(a)*r};
+    }
+
+    function parameters(mode,u,t,anchors) {
+      let intensity=0, color=COLORS.cyan;
+      const {e,w}=anchors;
+      const pairDistance=Math.min(circularDistance(u,e),circularDistance(u,w));
+      const pairGlow=(target,width)=>Math.max(
+        Math.exp(-Math.pow(circularDistance(u,target[0])/width,2)),
+        Math.exp(-Math.pow(circularDistance(u,target[1])/width,2))
+      );
+
+      if(mode==='off') {
+        intensity=.22*(1-smoothstep(0,.18,t)); color=COLORS.white;
+      } else if(mode==='steady') {
+        intensity=pairDistance<.078?.46+.24*(1-pairDistance/.078):0;
+      } else if(mode==='lowBreath') {
+        const wave=(1-Math.cos((t%2.8)/2.8*Math.PI*2))/2;
+        intensity=reduced?.34:.24+wave*.30;
+      } else if(mode==='highBreath') {
+        const wave=(1-Math.cos((t%1.15)/1.15*Math.PI*2))/2;
+        intensity=reduced?.42:.25+wave*.48; color=COLORS.blue;
+      } else if(mode==='bloom') {
+        const phase=t%3, p=phase<.42?smoothstep(0,.42,phase):phase<1.18?1:phase<1.60?1-smoothstep(1.18,1.60,phase):0;
+        const extent=.018+p*(reduced?.075:.232);
+        if(pairDistance<extent){const edge=1-pairDistance/Math.max(.001,extent);intensity=(.34+edge*.36)*(.35+.65*p);}
+      } else if(mode==='ripple') {
+        const p=(t%2.7)/.52;
+        if(p<1){const head=.012+smoothstep(0,1,p)*(reduced?.085:.228);intensity=Math.exp(-Math.pow((pairDistance-head)/.019,2))*Math.sin(Math.PI*p)*.72;}
+      } else if(mode==='comet') {
+        if(reduced){intensity=pairDistance<.075?.5:0;color=COLORS.blue;}
+        else{const head=(e+t/1.65)%1,behind=(head-u+1)%1;if(behind<=.22){const n=behind/.22;intensity=Math.pow(1-n,1.75)*.82;color=mix(COLORS.blue,COLORS.cyan,n*.7);}}
+      } else if(mode==='twinComet') {
+        if(reduced){intensity=pairDistance<.075?.46:0;color=COLORS.blue;}
+        else{const head=(e+t/2.1)%1,head2=(head+.5)%1,b1=(head-u+1)%1,b2=(head2-u+1)%1,n=Math.min(b1,b2)/.14;if(n<=1){intensity=Math.pow(1-n,1.65)*.63;color=mix(COLORS.blue,COLORS.cyan,n*.55);}}
+      } else if(mode==='audioMirror') {
+        const level=reduced?.48:speakingLevel,extent=.045+level*(reduced?.12:.205);
+        if(pairDistance<extent){const edge=1-pairDistance/extent;intensity=(.34+edge*.48)*(reduced?.72:1);color=mix(COLORS.blueViolet,COLORS.violet,level*.82);}
+      } else if(mode==='directional') {
+        const slot=Math.floor(t/1.8),up=slot%2===0,p=(t%1.8)/.28;
+        if(p<1){const travel=.018+smoothstep(0,1,p)*.225,heads=up?[(e-travel+1)%1,(w+travel)%1]:[(e+travel)%1,(w-travel+1)%1];intensity=pairGlow(heads,.022)*Math.sin(Math.PI*p)*.96;color=COLORS.white;}
+      } else if(mode==='progress') {
+        const progress=(1-Math.cos((t%5)/5*Math.PI*2))/2,extent=.008+progress*.242;
+        if(pairDistance<=extent){const edge=1-pairDistance/Math.max(.01,extent);intensity=.42+edge*.18;color=COLORS.orange;}
+      } else if(mode==='confirm') {
+        const phase=t%3,env=phase<.14?smoothstep(0,.14,phase):phase<.20?1:phase<.56?1-smoothstep(.20,.56,phase):0;
+        intensity=env*.82;color=COLORS.green;
+      } else if(mode==='doubleBeat') {
+        const phase=t%4;
+        const first=phase<.10?smoothstep(0,.10,phase):phase<.28?1-smoothstep(.10,.28,phase):0;
+        const second=phase>=.44&&phase<.56?smoothstep(.44,.56,phase):phase>=.56&&phase<.92?1-smoothstep(.56,.92,phase):0;
+        intensity=Math.max(first*.58,second*.84);color=COLORS.red;
+      }
+      return {intensity,color};
+    }
+
+    function draw(now) {
+      const rect=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2),w=rect.width,h=rect.height;
+      const pw=Math.max(1,Math.round(w*dpr)),ph=Math.max(1,Math.round(h*dpr));
+      if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;}
+      ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+      const day=document.body.classList.contains('day');
+      const aura=ctx.createRadialGradient(w*.5,h*.46,20,w*.5,h*.48,h*.56);
+      aura.addColorStop(0,day?'rgba(73,104,255,.12)':'rgba(64,92,180,.2)');aura.addColorStop(1,'rgba(4,8,18,0)');ctx.fillStyle=aura;ctx.fillRect(0,0,w,h);
+      const cx=w*.5,cy=h*.46,r=Math.min(w*.16,h*.13),straight=Math.min(h*.34,h-r*2-88),total=2*straight+2*Math.PI*r;
+      const e=(straight/2)/total,wAnchor=(e+.5)%1,n=(e-.25+1)%1,s=(e+.25)%1,anchors={e,w:wAnchor,n,s};
+      const t=(now-startedAt)/1000*playback;
+      timecode.textContent=`${String(Math.floor(t/60)).padStart(2,'0')}:${String(Math.floor(t%60)).padStart(2,'0')}.${String(Math.floor(t%1*1000)).padStart(3,'0')}`;
+      const active=modes[selected];
+      const directionUp=Math.floor(t/1.8)%2===0;
+      directionHint.classList.toggle('show',active.id==='directional');
+      directionHint.textContent=directionUp?'↑ 中心向上':'↓ 中心向下';
+
+      if(active.id==='audioMirror'){
+        const target=reduced?.48:.48+.22*Math.sin(t*4.1)+.12*Math.sin(t*7.4+1.1)+.07*Math.sin(t*12.3);
+        speakingLevel+=(target-speakingLevel)*(target>speakingLevel?.16:.055);
+      }
+
+      ctx.save();ctx.lineCap='round';ctx.lineWidth=r*.5;ctx.strokeStyle=day?'rgba(15,22,39,.88)':'rgba(7,11,22,.95)';ctx.beginPath();ctx.moveTo(cx+r,cy-straight/2);ctx.lineTo(cx+r,cy+straight/2);ctx.arc(cx,cy+straight/2,r,0,Math.PI);ctx.lineTo(cx-r,cy-straight/2);ctx.arc(cx,cy-straight/2,r,Math.PI,Math.PI*2);ctx.closePath();ctx.stroke();ctx.restore();
+      const envScale=environment==='day'?1:environment==='night'?.48:.72;
+      for(let i=0;i<180;i++){
+        const u=i/180,pos=capsulePoint(u,cx,cy,r,straight),light=parameters(active.id,u,t,anchors);let a=light.intensity*envScale;
+        if(a<.003)continue;ctx.save();ctx.globalCompositeOperation='lighter';ctx.shadowColor=colorCss(light.color,a);ctx.shadowBlur=12+a*24;ctx.fillStyle=colorCss(light.color,a);ctx.beginPath();ctx.arc(pos.x,pos.y,2.8+a*1.8,0,Math.PI*2);ctx.fill();ctx.restore();
+      }
+
+      const labelColor=day?'rgba(17,24,39,.42)':'rgba(220,229,255,.38)';
+      ctx.save();ctx.fillStyle=labelColor;ctx.font='600 9px ui-monospace, monospace';ctx.textAlign='center';ctx.fillText('N',cx,cy-straight/2-r-18);ctx.fillText('S',cx,cy+straight/2+r+23);ctx.textAlign='left';ctx.fillText('E',cx+r+18,cy+3);ctx.textAlign='right';ctx.fillText('W',cx-r-18,cy+3);ctx.restore();
+
+      ctx.save();ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=18;ctx.fillStyle=day?'rgba(250,252,255,.98)':'rgba(8,12,23,.98)';ctx.strokeStyle=day?'rgba(83,104,150,.34)':'rgba(169,188,235,.34)';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(cx,cy,22,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;ctx.fillStyle=active.color;ctx.globalAlpha=.78;ctx.beginPath();ctx.arc(cx,cy-8,2.4,0,Math.PI*2);ctx.fill();ctx.globalAlpha=.62;ctx.fillStyle=day?'#111827':'#eef3ff';ctx.font='650 10px ui-monospace, monospace';ctx.textAlign='center';ctx.fillText(active.id==='directional'?(directionUp?'↑':'↓'):'C',cx,cy+5);ctx.restore();
+      animationFrame=requestAnimationFrame(draw);
+    }
+
+    function renderModes(){
+      modeList.innerHTML=modes.map((m,i)=>`<button type="button" class="mode-button${i===selected?' active':''}" data-index="${i}" style="--dot:${m.color}"><span class="num">${m.code}</span><span class="dot"></span><span class="name">${m.name}</span></button>`).join('');
+      modeList.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>selectMode(Number(btn.dataset.index))));
+    }
+    function selectMode(index){selected=index;startedAt=performance.now();speakingLevel=.45;const m=modes[index];modeName.textContent=m.name;modeSummary.textContent=m.summary;modeEyebrow.textContent=m.eyebrow;modeIndex.textContent=m.code;preview.style.setProperty('--mode-color',m.color);specs.innerHTML=m.specs.map(s=>`<span class="spec-chip">${s}</span>`).join('');renderModes();}
+    document.getElementById('replay').addEventListener('click',()=>{startedAt=performance.now();speakingLevel=.45;});
+    document.getElementById('reducedMotion').addEventListener('click',e=>{reduced=!reduced;e.currentTarget.classList.toggle('on',reduced);e.currentTarget.setAttribute('aria-checked',String(reduced));startedAt=performance.now();});
+    document.querySelectorAll('#environment button').forEach(btn=>btn.addEventListener('click',()=>{environment=btn.dataset.environment;document.body.classList.toggle('day',environment==='day');document.querySelectorAll('#environment button').forEach(x=>x.classList.toggle('active',x===btn));}));
+    document.querySelectorAll('#speed button').forEach(btn=>btn.addEventListener('click',()=>{playback=Number(btn.dataset.speed);startedAt=performance.now();document.querySelectorAll('#speed button').forEach(x=>x.classList.toggle('active',x===btn));}));
+    selectMode(selected);animationFrame=requestAnimationFrame(draw);
+    addEventListener('beforeunload',()=>cancelAnimationFrame(animationFrame));
+  </script>
+</body>
+</html>
