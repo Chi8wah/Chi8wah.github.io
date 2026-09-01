@@ -135,13 +135,13 @@
         <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>Amivo Motion Lab</span></div>
         <p class="subhead">跑道圆发光区域 · 理想动画预览</p>
       </div>
-      <div class="header-note"><i></i> Single-file prototype</div>
+      <div class="header-note"><i></i> 20-LED optical model</div>
     </header>
 
     <main class="workspace">
       <section class="preview" id="preview">
         <div class="preview-top">
-          <div class="kicker"><b id="modeIndex">S07</b><span id="modeEyebrow">M08 · Audio mirror</span></div>
+          <div class="kicker"><b id="modeIndex">S07</b><span id="modeEyebrow">M08 · Random mirror</span></div>
           <div class="live"><i></i> Live preview</div>
         </div>
         <div class="stage">
@@ -176,8 +176,8 @@
             <button class="switch" id="reducedMotion" type="button" role="switch" aria-checked="false" aria-label="低动态模式"></button>
           </div>
           <div class="toggle-row">
-            <span class="toggle-copy"><strong>24 颗实灯 + 柔光罩</strong><small>用真实灯位驱动，再重建罩体中的连续光带</small></span>
-            <button class="switch" id="hardware24" type="button" role="switch" aria-checked="false" aria-label="24 颗实灯与柔光罩模拟"></button>
+            <span class="toggle-copy"><strong>20 颗实灯 + 柔光罩</strong><small>四个主轴都位于相邻两颗灯之间</small></span>
+            <button class="switch" id="hardware20" type="button" role="switch" aria-checked="false" aria-label="20 颗实灯与柔光罩模拟"></button>
           </div>
         </section>
         <section class="section">
@@ -201,7 +201,7 @@
             <div class="swatch" style="--swatch:#ffb240" title="暖琥珀"></div>
           </div>
         </section>
-        <p class="footnote">模式与状态分层预览：M00–M12 是纯动画模式，S01–S16 是需求文档 5.1 的典型状态映射。中心圆形控件是摇杆 C。开启 24 灯模拟后，动画只驱动 N/S 各 1 颗、左右各 11 颗实体灯，再由跑道形柔光罩重建可见光带；它不代表当前固件能力。</p>
+        <p class="footnote">模式与状态分层预览：M00–M12 是纯动画模式，S01–S16 是典型状态映射。中心圆形控件是摇杆 C。开启 20 灯模拟后，20 颗实体灯沿跑道近似等距排列，N/S/E/W 均落在相邻灯的中点；镜像动画按 G0–G4 五组、每组 4 灯计算，再由柔光罩重建连续光带。照片尚不能确认固件编号和数据方向。</p>
       </aside>
     </main>
   </div>
@@ -214,32 +214,32 @@
     };
     const modes = [
       { code:'M00', id:'off', name:'无光', eyebrow:'Off', color:'#151b29', summary:'整圈无光。它是一个明确模式，而不是尚未加载或动画异常。', specs:['B00','100–180 ms 收束','可立即打断','无残留光'] },
-      { code:'M01', id:'steady', name:'常亮', eyebrow:'Steady', color:'#32d6ff', summary:'E/W 两个中心投影点形成左右完全对称的稳定短段。', specs:['CENTER_PAIR','B32','160–220 ms 淡入','左右光能差 <5%'] },
-      { code:'M02', id:'lowBreath', name:'低频呼吸', eyebrow:'Low breath', color:'#32d6ff', summary:'整圈缓慢、柔和地呼吸，谷值保留余光，不会闪到全灭。', specs:['2800 ms / 周期','B18 ↔ B38','谷值 ≥峰值 45%','下降略慢'] },
-      { code:'M03', id:'highBreath', name:'高频呼吸', eyebrow:'High breath', color:'#597bff', summary:'更积极的连续呼吸，用于表达正在尝试或等待，但仍不形成闪烁。', specs:['1150 ms / 周期','B22 ↔ B58','谷值 ≥峰值 35%','不长期驻留'] },
-      { code:'M04', id:'bloom', name:'中心镜像展开', eyebrow:'Center bloom', color:'#32d6ff', summary:'光从中心摇杆 C 投影到 E/W，再向 N/S 四路完全镜像展开与收回。', specs:['420 ms','E/W 双光种','四路镜像','可反向'] },
-      { code:'M05', id:'ripple', name:'中心镜像涟漪', eyebrow:'Center ripple', color:'#32d6ff', summary:'两枚光种从 E/W 同时产生四道短波，沿上下方向柔和远去。', specs:['520 ms','波前 6–10%','拖尾 8–12%','自动消散'] },
-      { code:'M06', id:'comet', name:'彗星拖尾', eyebrow:'Comet trail', color:'#597bff', summary:'一个青蓝光头沿完整跑道匀速环绕，拖尾连续衰减。', specs:['1650 ms / 圈','光头 3–5%','拖尾 18–22%','无接缝顿挫'] },
-      { code:'M07', id:'twinComet', name:'双彗星平衡轨道', eyebrow:'Twin comet', color:'#597bff', summary:'两个相差半圈的光头同向运行，保持左右光能平衡和从容节奏。', specs:['2100 ms / 圈','相差 180°','拖尾 10–14%','不反向对撞'] },
-      { code:'M08', id:'audioMirror', name:'中心镜像声浪', eyebrow:'Audio mirror', color:'#8b75ff', summary:'模拟 TTS 能量驱动 E/W 两侧光带同时向 N/S 四路伸缩；AI 回答永远不是单侧发光。', specs:['20 ms 能量更新','60–80 ms attack','200–240 ms release','四路镜像'] },
-      { code:'M09', id:'directional', name:'中心定向流', eyebrow:'Directional flow', color:'#f2f7ff', summary:'光从中心摇杆的 E/W 投影点出发，沿左右两侧向上或向下汇合。', specs:['220–320 ms','跟随手势方向','速度连续继承','无回弹'] },
-      { code:'M10', id:'progress', name:'对称进度环', eyebrow:'Symmetric progress', color:'#ffb240', summary:'进度从 E/W 同时向 N/S 四路填充，100% 时整圈闭合。', specs:['0–100%','220 ms 响应','可连续重定向','回退路径一致'] },
-      { code:'M11', id:'confirm', name:'单次确认脉冲', eyebrow:'Confirmation pulse', color:'#62dfa2', summary:'整圈快速聚亮后柔和回落，只播放一次，并保留下层模式相位。', specs:['560 ms','140 ms 上升','360 ms 回落','不闪黑'] },
-      { code:'M12', id:'doubleBeat', name:'双拍提醒', eyebrow:'Double beat', color:'#ff6b63', summary:'两次有间隔的柔和光拍；第二拍略强，拍间保留余光。', specs:['920 ms','两拍之间不全灭','默认单次','错误 / 重要提醒'] }
+      { code:'M01', id:'steady', name:'常亮', eyebrow:'Steady', color:'#32d6ff', summary:'E/W 两个中心投影点形成左右完全对称的稳定短段。', specs:['G0 · 4 颗灯','B32','160–220 ms 淡入','左右光能差 <5%'] },
+      { code:'M02', id:'lowBreath', name:'低频呼吸', eyebrow:'Low breath', color:'#32d6ff', summary:'20 颗灯同相位缓慢呼吸，谷值保留余光，不会闪到全灭。', specs:['20 灯同步','2800 ms / 周期','B18 ↔ B38','下降略慢'] },
+      { code:'M03', id:'highBreath', name:'高频呼吸', eyebrow:'High breath', color:'#597bff', summary:'20 颗灯进行更积极的连续呼吸，用于表达正在尝试或等待。', specs:['20 灯同步','1150 ms / 周期','B22 ↔ B58','谷值不为 0'] },
+      { code:'M04', id:'bloom', name:'中心镜像展开', eyebrow:'Center bloom', color:'#32d6ff', summary:'光从 G0 的 4 颗中心灯出发，按 G0→G4 四路镜像展开与收回。', specs:['G0 → G4','每组 4 灯','420 ms','边界组交叉渐变'] },
+      { code:'M05', id:'ripple', name:'中心镜像涟漪', eyebrow:'Center ripple', color:'#32d6ff', summary:'波前按 G0→G4 运动，宽度覆盖相邻组，并逐帧保持总光能。', specs:['520 ms','波前 0.82 组','每帧光能守恒','自动消散'] },
+      { code:'M06', id:'comet', name:'彗星拖尾', eyebrow:'Comet trail', color:'#597bff', summary:'小数灯位光头沿 20 灯环匀速运行，相邻灯交叉分光且总光能恒定。', specs:['1650 ms / 圈','光头约 1.6 灯距','拖尾 4.6 灯距','每帧光能守恒'] },
+      { code:'M07', id:'twinComet', name:'双彗星平衡轨道', eyebrow:'Twin comet', color:'#597bff', summary:'两个相差 10 颗灯的光头同向运行，各自跨相邻灯连续分光。', specs:['2100 ms / 圈','相差 10 灯','拖尾 3.4 灯距','每帧光能守恒'] },
+      { code:'M08', id:'randomMirror', name:'中心镜像声浪', eyebrow:'Random mirror', color:'#8b75ff', summary:'平滑随机值控制 G0→G4 的边界组亮度，始终保持四路镜像。', specs:['G0 → G4','320 ms 随机基准','70 / 220 ms 平滑','边界组交叉渐变'] },
+      { code:'M09', id:'directional', name:'中心定向流', eyebrow:'Directional flow', color:'#f2f7ff', summary:'光沿两条各 5 组的实体灯路径，从 E/W 灯缝流向 N 或 S 灯缝。', specs:['双路径 × 5 组','220–320 ms','每帧光能守恒','端点不叠加'] },
+      { code:'M10', id:'progress', name:'对称进度环', eyebrow:'Symmetric progress', color:'#ffb240', summary:'真实进度映射到 G0→G4，下一组以连续亮度表达小数进度。', specs:['G0 → G4','每组 4 灯','0–100%','边界组连续'] },
+      { code:'M11', id:'confirm', name:'单次确认脉冲', eyebrow:'Confirmation pulse', color:'#62dfa2', summary:'20 颗灯同步快速聚亮后柔和回落，只播放一次。', specs:['20 灯同步','560 ms','140 ms 上升','360 ms 回落'] },
+      { code:'M12', id:'doubleBeat', name:'双拍提醒', eyebrow:'Double beat', color:'#ff6b63', summary:'20 颗灯同步完成两次柔和光拍；第二拍略强，拍间保留余光。', specs:['20 灯同步','920 ms','两拍之间不全灭','默认单次'] }
     ];
     const states = [
       { code:'S01', id:'frameOff', name:'相框静默', modeId:'off', mapping:'M00', color:'#151b29', summary:'相框静默或 Frame Off 时整圈无光；恢复时进入当前仍有效的状态。', specs:['M00 无光','100–180 ms 收束','不补播旧反馈','最高优先级'] },
       { code:'S02', id:'idle', name:'安静待机', modeId:'lowBreath', mapping:'M00 · 稀疏 M02', tone:'cyan', color:'#32d6ff', summary:'默认无光；演示中间隔播放一次极低亮呼吸，表达 Amivo 安静可用。', specs:['M00 + 稀疏 M02','B08–B14','单周期提示','交互立即中断'] },
-      { code:'S03', id:'connecting', name:'正在连接', modeId:'highBreath', mapping:'M03', tone:'blue', color:'#597bff', summary:'陪伴蓝高频呼吸表达正在积极连接，谷值保留余光而不闪黑。', specs:['M03 · FULL_RING','B22 ↔ B48','连续可打断','失败转提醒'] },
-      { code:'S04', id:'listening', name:'正在聆听', modeId:'steady', mapping:'M04 → M01', tone:'cyan', color:'#32d6ff', summary:'先从中心摇杆四路镜像展开，再连续收束为 E/W 左右稳定短段。', specs:['M04 → M01','CENTER_PAIR','B34','无全灭过渡'] },
-      { code:'S05', id:'thinking', name:'正在思考', modeId:'comet', mapping:'M06', color:'#597bff', summary:'单枚青蓝彗星沿跑道持续环绕，清楚表达处理仍在进行。', specs:['M06 彗星拖尾','峰值 B56','1650 ms / 圈','从当前位置退出'] },
-      { code:'S06', id:'deepTask', name:'深度处理 / 长任务', modeId:'twinComet', mapping:'M07', color:'#597bff', summary:'双彗星以半圈间隔同向运行，让长任务保持平衡而从容。', specs:['M07 双彗星','单头峰值 B40','相差 180°','不反向对撞'] },
-      { code:'S07', id:'answering', name:'AI 回答', modeId:'audioMirror', mapping:'M08', color:'#8b75ff', summary:'模拟 TTS 能量驱动 E/W 光带向 N/S 四路镜像伸缩，始终保持左右平衡。', specs:['M08 中心镜像声浪','B24–B62','20 ms 能量更新','四路镜像'] },
+      { code:'S03', id:'connecting', name:'正在连接', modeId:'highBreath', mapping:'M03', tone:'blue', color:'#597bff', summary:'陪伴蓝高频呼吸表达正在积极连接，谷值保留余光而不闪黑。', specs:['M03 · 20 灯同步','B22 ↔ B48','连续可打断','失败转提醒'] },
+      { code:'S04', id:'listening', name:'正在聆听', modeId:'steady', mapping:'M04 → M01', tone:'cyan', color:'#32d6ff', summary:'先按 G0→G4 四路镜像展开，再连续收束为 G0 的 4 颗中心灯。', specs:['M04 → M01','G0 · 4 颗灯','B34','无全灭过渡'] },
+      { code:'S05', id:'thinking', name:'正在思考', modeId:'comet', mapping:'M06', color:'#597bff', summary:'单枚青蓝彗星沿 20 灯跑道持续环绕，清楚表达处理仍在进行。', specs:['M06 彗星拖尾','峰值 B56','1650 ms / 圈','光能恒定'] },
+      { code:'S06', id:'deepTask', name:'深度处理 / 长任务', modeId:'twinComet', mapping:'M07', color:'#597bff', summary:'双彗星相隔 10 颗灯同向运行，让长任务保持平衡而从容。', specs:['M07 双彗星','单头峰值 B40','相差 10 灯','光能恒定'] },
+      { code:'S07', id:'answering', name:'AI 回答', modeId:'randomMirror', mapping:'M08', color:'#8b75ff', summary:'固件内部平滑随机值驱动 G0→G4 镜像伸缩，始终保持左右平衡。', specs:['M08 中心镜像声浪','G0 → G4','320 ms 随机基准','边界组渐变'] },
       { code:'S08', id:'joystickUp', name:'摇杆向上', modeId:'directional', mapping:'M09 · UP', direction:'up', tone:'white', color:'#f2f7ff', summary:'光从中心投影点沿左右两侧向 N 汇合，方向与摇杆动作严格一致。', specs:['M09 · UP','峰值 B70','220–320 ms','顶部汇合'] },
       { code:'S09', id:'joystickDown', name:'摇杆向下', modeId:'directional', mapping:'M09 · DOWN', direction:'down', tone:'white', color:'#f2f7ff', summary:'光从中心投影点沿左右两侧向 S 汇合，结束后露出下层状态。', specs:['M09 · DOWN','峰值 B70','220–320 ms','底部汇合'] },
       { code:'S10', id:'volume', name:'音量变化', modeId:'progress', mapping:'M09 + M10', direction:'up', tone:'white', color:'#f2f7ff', summary:'先用中心定向流确认摇杆方向，再以对称进度环显示当前音量。', specs:['M09 + M10','示例音量 68%','650 ms 停留','一次性前景'] },
-      { code:'S11', id:'pairing', name:'配网 / 恢复', modeId:'lowBreath', mapping:'M02', tone:'orange', color:'#ffb240', summary:'暖琥珀整圈低频呼吸，持续表达系统流程仍在进行。', specs:['M02 · FULL_RING','B18 ↔ B42','最低亮度不为 0','完成转确认'] },
-      { code:'S12', id:'progressTask', name:'下载 / 重置倒计时', modeId:'progress', mapping:'M10', tone:'orange', color:'#ffb240', summary:'真实进度从 E/W 向 N/S 四路对称填充，回退沿原路径收回。', specs:['M10 对称进度环','B44','0–100%','可连续重定向'] },
+      { code:'S11', id:'pairing', name:'配网 / 恢复', modeId:'lowBreath', mapping:'M02', tone:'orange', color:'#ffb240', summary:'暖琥珀整圈低频呼吸，持续表达系统流程仍在进行。', specs:['M02 · 20 灯同步','B18 ↔ B42','最低亮度不为 0','完成转确认'] },
+      { code:'S12', id:'progressTask', name:'下载 / 重置倒计时', modeId:'progress', mapping:'M10', tone:'orange', color:'#ffb240', summary:'真实进度按 G0→G4 四路对称填充，回退沿原路径收回。', specs:['M10 · G0 → G4','B44','0–100%','边界组连续'] },
       { code:'S13', id:'success', name:'操作成功', modeId:'confirm', mapping:'M11', tone:'green', color:'#62dfa2', summary:'薄荷绿确认脉冲只播放一次，并在回落后恢复下层状态。', specs:['M11 单次确认','峰值 B64','560 ms','与成功声音同帧'] },
       { code:'S14', id:'attention', name:'需要用户处理', modeId:'doubleBeat', mapping:'M12', tone:'orange', color:'#ffb240', summary:'暖琥珀双拍提醒一次；若仍未处理，才允许低频重播。', specs:['M12 双拍提醒','峰值 B60','8–12 s 可重播','拍间保留余光'] },
       { code:'S15', id:'error', name:'明确错误', modeId:'doubleBeat', mapping:'M12', tone:'red', color:'#ff6b63', summary:'珊瑚红双拍用于明确错误，节奏克制，不使用高频红白闪烁。', specs:['M12 双拍提醒','峰值 B68','默认单次','错误优先级最高'] },
@@ -267,12 +267,18 @@
     let selectedState = 6;
     let environment = 'night';
     let reduced = false;
-    let hardware24 = false;
+    const LED_COUNT = 20;
+    const DIFFUSER_SAMPLE_COUNT = 160;
+    let hardware20 = false;
     let playback = 1;
     let startedAt = performance.now();
     let animationFrame = 0;
     let framePending = false;
-    let speakingLevel = .45;
+    let randomWaveLevel = .45;
+    let randomWaveTarget = .56;
+    let nextRandomTargetAt = 0;
+    let lastRandomWaveAt = 0;
+    let randomSeed = 0x41c64e6d;
     let geometryCache = null;
     let lastTimecodePaint = -Infinity;
     let lastDirectionKey = '';
@@ -298,11 +304,14 @@
       const cx=w*.5,cy=h*.46,r=Math.min(w*.16,h*.13),straight=Math.min(h*.34,h-r*2-88),total=2*straight+2*Math.PI*r;
       const e=(straight/2)/total,wAnchor=(e+.5)%1,n=(e-.25+1)%1,s=(e+.25)%1,anchors={e,w:wAnchor,n,s};
       const idealPositions=Array.from({length:180},(_,i)=>capsulePoint(i/180,cx,cy,r,straight));
-      const ledUs=Array.from({length:24},(_,i)=>(n+i/24)%1);
-      const diffuserPositions=Array.from({length:120},(_,i)=>capsulePoint((n+i/120)%1,cx,cy,r,straight));
-      const padding=Math.max(24,Math.min(34,total/24)),left=Math.floor(cx-r-padding),top=Math.floor(cy-straight/2-r-padding),right=Math.ceil(cx+r+padding),bottom=Math.ceil(cy+straight/2+r+padding);
+      // The photographed 20-LED board has no lamp on N/S/E/W. The four axes
+      // sit exactly between adjacent lamps, so the first source starts at half a pitch after N.
+      const firstLedU=(n+.5/LED_COUNT)%1;
+      const ledUs=Array.from({length:LED_COUNT},(_,i)=>(firstLedU+i/LED_COUNT)%1);
+      const diffuserPositions=Array.from({length:DIFFUSER_SAMPLE_COUNT},(_,i)=>capsulePoint((firstLedU+i/DIFFUSER_SAMPLE_COUNT)%1,cx,cy,r,straight));
+      const padding=Math.max(26,Math.min(38,total/LED_COUNT)),left=Math.floor(cx-r-padding),top=Math.floor(cy-straight/2-r-padding),right=Math.ceil(cx+r+padding),bottom=Math.ceil(cy+straight/2+r+padding);
       const lightBounds={x:left,y:top,width:right-left,height:bottom-top};
-      geometryCache={key,w,h,cx,cy,r,straight,total,anchors,idealPositions,ledUs,diffuserPositions,lightBounds};
+      geometryCache={key,w,h,cx,cy,r,straight,total,anchors,idealPositions,firstLedU,ledUs,diffuserPositions,lightBounds};
       return geometryCache;
     }
 
@@ -385,8 +394,8 @@
       } else if(mode==='twinComet') {
         if(reduced){intensity=pairDistance<.075?.46:0;color=COLORS.blue;}
         else{const head=(e+t/2.1)%1,head2=(head+.5)%1,b1=(head-u+1)%1,b2=(head2-u+1)%1,n=Math.min(b1,b2)/.14;if(n<=1){intensity=Math.pow(1-n,1.65)*.63;color=mix(COLORS.blue,COLORS.cyan,n*.55);}}
-      } else if(mode==='audioMirror') {
-        const level=reduced?.48:speakingLevel,extent=.045+level*(reduced?.12:.205);
+      } else if(mode==='randomMirror') {
+        const level=reduced?.48:randomWaveLevel,extent=.045+level*(reduced?.12:.205);
         if(pairDistance<extent){const edge=1-pairDistance/extent;intensity=(.34+edge*.48)*(reduced?.72:1);color=mix(COLORS.blueViolet,COLORS.violet,level*.82);}
       } else if(mode==='directional') {
         const slot=Math.floor(t/1.8),up=options.direction?options.direction==='up':slot%2===0,phase=t%1.8,p=Math.min(1,phase/.28);
@@ -434,6 +443,24 @@
       return activeKind==='mode'?parameters(active.id,u,t,anchors):stateParameters(state,u,t,anchors);
     }
 
+    function randomUnit() {
+      randomSeed=(Math.imul(randomSeed,1664525)+1013904223)>>>0;
+      return randomSeed/4294967296;
+    }
+
+    function updateRandomMirror(t) {
+      if(reduced){randomWaveLevel=.48;lastRandomWaveAt=t;return;}
+      if(t<lastRandomWaveAt){lastRandomWaveAt=t;nextRandomTargetAt=0;}
+      while(t>=nextRandomTargetAt){
+        randomWaveTarget=.10+randomUnit()*.86;
+        nextRandomTargetAt+=(.32*(.75+randomUnit()*.50));
+      }
+      const dt=Math.min(.05,Math.max(0,t-lastRandomWaveAt));
+      const response=randomWaveTarget>randomWaveLevel?.07:.22;
+      randomWaveLevel+=(randomWaveTarget-randomWaveLevel)*(1-Math.exp(-dt/response));
+      lastRandomWaveAt=t;
+    }
+
     function drawIdealLights(active,state,t,geometry,envScale) {
       const {total,anchors,idealPositions,lightBounds}=geometry;
       prepareLightLayer(lightBounds);
@@ -444,43 +471,155 @@
       compositeLightLayer(lightBounds,Math.max(7,Math.min(11,total/82)),.72);
     }
 
-    function sampleHardwareLed(active,state,t,anchors,u,pitch,effectiveMode) {
-      const movingModes=['bloom','ripple','comet','twinComet','audioMirror','directional','progress'];
-      if(!movingModes.includes(effectiveMode))return {u,...activeLight(active,state,u,t,anchors)};
-      const offsets=[-.38,-.18,0,.18,.38],weights=[.08,.16,.52,.16,.08];
-      let intensity=0,red=0,green=0,blue=0,colorEnergy=0;
-      for(let i=0;i<offsets.length;i++){
-        const light=activeLight(active,state,(u+offsets[i]*pitch+1)%1,t,anchors),weighted=light.intensity*weights[i];
-        intensity+=weighted;colorEnergy+=weighted;red+=light.color[0]*weighted;green+=light.color[1]*weighted;blue+=light.color[2]*weighted;
+    function wrapLedPosition(value) { return ((value%LED_COUNT)+LED_COUNT)%LED_COUNT; }
+    function ledDistance(index,position) { const d=Math.abs(index-wrapLedPosition(position));return Math.min(d,LED_COUNT-d); }
+    function mirrorGroup(index) {
+      const distance=Math.min(ledDistance(index,4.5),ledDistance(index,14.5));
+      return Math.max(0,Math.min(4,Math.round(distance-.5)));
+    }
+    function directionalGroup(index,direction) {
+      const paths=direction==='down'?[[5,6,7,8,9],[14,13,12,11,10]]:[[4,3,2,1,0],[15,16,17,18,19]];
+      for(const path of paths){const group=path.indexOf(index);if(group>=0)return group;}
+      return -1;
+    }
+    function normalizeLedEnergy(leds,targetEnergy,peak=1) {
+      const target=Math.max(0,Math.min(targetEnergy,leds.length*peak));
+      const raw=leds.map(led=>Math.max(0,led.intensity));
+      const output=new Array(leds.length).fill(0);
+      let free=raw.map((_,i)=>i),remaining=target;
+      while(free.length&&remaining>1e-6){
+        const sum=free.reduce((value,i)=>value+raw[i],0);
+        if(sum<=1e-9)break;
+        const scale=remaining/sum,saturated=free.filter(i=>raw[i]*scale>peak);
+        if(!saturated.length){free.forEach(i=>{output[i]=raw[i]*scale;});remaining=0;break;}
+        saturated.forEach(i=>{output[i]=peak;remaining-=peak;});
+        const saturatedSet=new Set(saturated);free=free.filter(i=>!saturatedSet.has(i));
       }
-      const color=colorEnergy>.0001?[Math.round(red/colorEnergy),Math.round(green/colorEnergy),Math.round(blue/colorEnergy)]:COLORS.cyan;
-      return {u,intensity,color};
+      leds.forEach((led,i)=>{led.intensity=output[i];});
+      return leds;
+    }
+    function scaleLedEnergy(leds,scale) { leds.forEach(led=>{led.intensity*=scale;});return leds; }
+    function hardwareModeLeds(mode,t,geometry,options={}) {
+      const {ledUs}=geometry;
+      const fallback={
+        off:COLORS.white,steady:COLORS.cyan,lowBreath:COLORS.cyan,highBreath:COLORS.blue,
+        bloom:COLORS.cyan,ripple:COLORS.cyan,comet:COLORS.blue,twinComet:COLORS.blue,
+        randomMirror:COLORS.blueViolet,directional:COLORS.white,progress:COLORS.orange,
+        confirm:COLORS.green,doubleBeat:COLORS.red
+      }[mode]||COLORS.cyan;
+      const solidColor=options.color||fallback;
+      const leds=ledUs.map((u,index)=>({u,index,intensity:0,color:solidColor}));
+
+      if(mode==='off'){
+        const envelope=.22*(1-smoothstep(0,.18,t));leds.forEach(led=>{led.intensity=envelope;});
+      }else if(mode==='steady'){
+        leds.forEach(led=>{if(mirrorGroup(led.index)===0)led.intensity=.64;});
+      }else if(mode==='lowBreath'||mode==='highBreath'){
+        const period=mode==='lowBreath'?2.8:1.15;
+        const wave=(1-Math.cos((t%period)/period*Math.PI*2))/2;
+        const level=reduced?(mode==='lowBreath'?.34:.42):(mode==='lowBreath'?.24+wave*.30:.25+wave*.48);
+        leds.forEach(led=>{led.intensity=level;});
+      }else if(mode==='bloom'){
+        const phase=t%3,p=phase<.42?smoothstep(0,.42,phase):phase<1.18?1:phase<1.60?1-smoothstep(1.18,1.60,phase):0;
+        const front=.5+p*(reduced?1.25:4),envelope=.35+.65*p;
+        leds.forEach(led=>{const group=mirrorGroup(led.index),fill=smoothstep(group-.5,group+.5,front);led.intensity=fill*(.48+.16*(1-group/4))*envelope;});
+      }else if(mode==='ripple'){
+        const phase=t%2.7,p=Math.min(1,phase/.52);
+        if(phase<.68){
+          const head=smoothstep(0,1,p)*(reduced?1.4:4),envelope=smoothstep(0,.08,phase)*(1-smoothstep(.52,.68,phase));
+          leds.forEach(led=>{const group=mirrorGroup(led.index),delta=group-head,front=Math.exp(-.5*Math.pow(delta/.82,2)),trail=delta<=0?.28*Math.exp(delta/1.35):0;led.intensity=Math.max(front,trail);});
+          normalizeLedEnergy(leds,2.9*envelope,.72);
+        }
+      }else if(mode==='comet'||mode==='twinComet'){
+        if(reduced){leds.forEach(led=>{if(mirrorGroup(led.index)===0)led.intensity=.5;});}
+        else{
+          const period=mode==='comet'?1.65:2.1,heads=mode==='comet'?[4.5+t/period*LED_COUNT]:[4.5+t/period*LED_COUNT,14.5+t/period*LED_COUNT];
+          const trailLength=mode==='comet'?4.6:3.4,headSigma=mode==='comet'?.78:.72;
+          leds.forEach(led=>{
+            let best=0,bestTail=1;
+            heads.forEach(position=>{const head=wrapLedPosition(position),behind=wrapLedPosition(head-led.index),core=Math.exp(-.5*Math.pow(ledDistance(led.index,head)/headSigma,2)),trail=behind<=trailLength?.78*Math.pow(1-behind/trailLength,1.65):0,value=Math.max(core,trail);if(value>best){best=value;bestTail=core>=trail?0:Math.min(1,behind/trailLength);}});
+            led.intensity=best*(mode==='comet'?.82:.63);
+            if(!options.color)led.color=mix(COLORS.blue,COLORS.cyan,bestTail*(mode==='comet'?.72:.58));
+          });
+          normalizeLedEnergy(leds,mode==='comet'?2.9:3.8,mode==='comet'?.82:.63);
+        }
+      }else if(mode==='randomMirror'){
+        const level=reduced?.48:randomWaveLevel,front=.5+level*(reduced?1.6:4);
+        leds.forEach(led=>{const group=mirrorGroup(led.index),fill=smoothstep(group-.5,group+.5,front);led.intensity=fill*(.28+level*.34)*(.82+.18*(1-group/4));if(!options.color)led.color=mix(COLORS.blueViolet,COLORS.violet,level*.82);});
+      }else if(mode==='directional'){
+        const direction=options.direction||((Math.floor(t/1.8)%2===0)?'up':'down'),phase=t%1.8,p=Math.min(1,phase/.28);
+        if(phase<.40){
+          const head=smoothstep(0,1,p)*4,envelope=smoothstep(0,.055,phase)*(1-smoothstep(.28,.40,phase));
+          leds.forEach(led=>{const group=directionalGroup(led.index,direction);if(group<0)return;const delta=group-head,core=Math.exp(-.5*Math.pow(delta/.72,2)),trail=delta<=0?.24*Math.exp(delta/1.1):0;led.intensity=Math.max(core,trail);});
+          normalizeLedEnergy(leds,1.65*envelope,.96);
+        }
+      }else if(mode==='progress'){
+        const progress=Number.isFinite(options.progress)?options.progress:(1-Math.cos((t%5)/5*Math.PI*2))/2,filled=progress*5;
+        leds.forEach(led=>{const group=mirrorGroup(led.index),coverage=smoothstep(0,1,filled-group),rest=group===0?.10:0;led.intensity=Math.max(rest,coverage*(.44+.12*(1-group/4)));});
+      }else if(mode==='confirm'){
+        const phase=t%3,envelope=phase<.14?smoothstep(0,.14,phase):phase<.20?1:phase<.56?1-smoothstep(.20,.56,phase):0;
+        leds.forEach(led=>{led.intensity=envelope*.82;});
+      }else if(mode==='doubleBeat'){
+        const phase=t%4;
+        const first=phase<.10?smoothstep(0,.10,phase):phase<.28?1-smoothstep(.10,.28,phase):0;
+        const second=phase>=.44&&phase<.56?smoothstep(.44,.56,phase):phase>=.56&&phase<.92?1-smoothstep(.56,.92,phase):0;
+        leds.forEach(led=>{led.intensity=Math.max(first*.58,second*.84);});
+      }
+      return leds;
+    }
+    function hardwareStateLeds(state,t,geometry) {
+      const tone=state.tone?COLORS[state.tone]:null;
+      if(state.id==='idle'){
+        const phase=t%7;
+        if(phase>2.8)return hardwareModeLeds('off',1,geometry);
+        return scaleLedEnergy(hardwareModeLeds('lowBreath',phase,geometry,{color:COLORS.cyan}),smoothstep(0,.26,phase)*(1-smoothstep(2.30,2.8,phase))*.38);
+      }
+      if(state.id==='listening'){
+        if(t<.42)return hardwareModeLeds('bloom',t,geometry,{color:COLORS.cyan});
+        if(t<.70)return hardwareModeLeds('bloom',1.18+(t-.42)/.28*.42,geometry,{color:COLORS.cyan});
+        return hardwareModeLeds('steady',t-.70,geometry,{color:COLORS.cyan});
+      }
+      if(state.id==='volume'){
+        const phase=t%3;
+        if(phase<.38)return hardwareModeLeds('directional',phase,geometry,{direction:'up',color:COLORS.white});
+        if(phase<1.18)return scaleLedEnergy(hardwareModeLeds('progress',phase,geometry,{progress:.68,color:COLORS.white}),smoothstep(.38,.50,phase)*(1-smoothstep(1,1.18,phase)));
+        return hardwareModeLeds('off',1,geometry);
+      }
+      return hardwareModeLeds(state.modeId,t,geometry,{direction:state.direction,color:tone});
     }
 
-    function drawHardwareLights(active,state,t,geometry,envScale,effectiveMode) {
-      const {total,anchors,ledUs,diffuserPositions,lightBounds}=geometry,pitch=1/24;
-      const leds=new Array(24),sourceRadius=Math.max(2.7,Math.min(4.2,total/120*.58));
+    function drawHardwareLights(active,state,t,geometry,envScale) {
+      const {total,firstLedU,diffuserPositions,lightBounds}=geometry,pitch=1/LED_COUNT;
+      const leds=activeKind==='mode'?hardwareModeLeds(active.id,t,geometry):hardwareStateLeds(state,t,geometry);
+      const sourceRadius=Math.max(2.8,Math.min(4.6,total/DIFFUSER_SAMPLE_COUNT*.76));
       let peakVisible=0;
       prepareLightLayer(lightBounds);prepareBloomLayer(lightBounds);
-      for(let i=0;i<24;i++){
-        leds[i]=sampleHardwareLed(active,state,t,anchors,ledUs[i],pitch,effectiveMode);
-      }
-      // Reconstruct only what the diffuser can show: five optical samples between
-      // each adjacent physical LED, derived exclusively from those two LED values.
-      for(let i=0;i<120;i++){
-        const phase=i/5,leftIndex=Math.floor(phase),fraction=phase-leftIndex,rightIndex=(leftIndex+1)%24;
-        const left=leds[leftIndex],right=leds[rightIndex],leftEnergy=left.intensity*(1-fraction),rightEnergy=right.intensity*fraction,energy=leftEnergy+rightEnergy;
+
+      // Rebuild the visible diffuser from the 20 physical sources. Each LED contributes
+      // an energy-normalized Gaussian footprint: brighter LEDs spread farther without
+      // creating extra total light. We never draw the raw packages as visible point spots.
+      for(let i=0;i<DIFFUSER_SAMPLE_COUNT;i++){
+        const u=(firstLedU+i/DIFFUSER_SAMPLE_COUNT)%1;
+        let energy=0,red=0,green=0,blue=0;
+        for(let j=0;j<LED_COUNT;j++){
+          const led=leds[j];
+          if(led.intensity<.002)continue;
+          const distanceLed=circularDistance(u,led.u)/pitch;
+          const spreadLed=.50+.62*Math.sqrt(led.intensity);
+          if(distanceLed>spreadLed*3.2)continue;
+          const contribution=(led.intensity/spreadLed)*Math.exp(-.5*Math.pow(distanceLed/spreadLed,2));
+          energy+=contribution;red+=led.color[0]*contribution;green+=led.color[1]*contribution;blue+=led.color[2]*contribution;
+        }
         if(energy<.002)continue;
-        const color=[Math.round((left.color[0]*leftEnergy+right.color[0]*rightEnergy)/energy),Math.round((left.color[1]*leftEnergy+right.color[1]*rightEnergy)/energy),Math.round((left.color[2]*leftEnergy+right.color[2]*rightEnergy)/energy)];
-        const a=(1-Math.exp(-energy*1.45))*envScale,bloomEnergy=Math.min(1,Math.pow(a,1.5)*1.7);
+        const color=[Math.round(red/energy),Math.round(green/energy),Math.round(blue/energy)];
+        const a=(1-Math.exp(-energy*1.08))*envScale,bloomEnergy=Math.min(1,Math.pow(a,1.35)*1.55);
         peakVisible=Math.max(peakVisible,a);
-        drawLightSource(diffuserPositions[i],color,a,sourceRadius+a*.9,lightBounds);
-        drawBloomSource(diffuserPositions[i],color,bloomEnergy,sourceRadius*(1.15+a*2.1),lightBounds);
+        drawLightSource(diffuserPositions[i],color,a,sourceRadius+a*1.1,lightBounds);
+        drawBloomSource(diffuserPositions[i],color,bloomEnergy,sourceRadius*(1.2+a*2.25),lightBounds);
       }
-      const baseBlur=Math.max(7,Math.min(11,total/24*.30));
-      // Bright samples contribute non-linearly to a wider halo; the core remains continuous.
-      if(peakVisible>.003)compositeBloomLayer(lightBounds,baseBlur+peakVisible*18,.9);
-      compositeLightLayer(lightBounds,baseBlur,.60);
+      const baseBlur=Math.max(8,Math.min(14,total/LED_COUNT*.26));
+      if(peakVisible>.003)compositeBloomLayer(lightBounds,baseBlur+peakVisible*17,.88);
+      compositeLightLayer(lightBounds,baseBlur,.72);
     }
 
     function previewNeedsAnimation(active,state,t) {
@@ -510,19 +649,16 @@
       const active=activeKind==='mode'?modes[selected]:states[selectedState];
       const state=activeKind==='state'?active:null;
       const volumePhase=state?.id==='volume'?t%3:null;
-      const effectiveMode=state?.id==='listening'?(t<.70?'bloom':'steady'):state?.id==='volume'?(volumePhase<.28?'directional':'progress'):active.id==='off'||active.id==='steady'||active.id==='lowBreath'||active.id==='highBreath'||active.id==='bloom'||active.id==='ripple'||active.id==='comet'||active.id==='twinComet'||active.id==='audioMirror'||active.id==='directional'||active.id==='progress'||active.id==='confirm'||active.id==='doubleBeat'?active.id:state?.modeId;
+      const effectiveMode=state?.id==='listening'?(t<.70?'bloom':'steady'):state?.id==='volume'?(volumePhase<.28?'directional':'progress'):active.id==='off'||active.id==='steady'||active.id==='lowBreath'||active.id==='highBreath'||active.id==='bloom'||active.id==='ripple'||active.id==='comet'||active.id==='twinComet'||active.id==='randomMirror'||active.id==='directional'||active.id==='progress'||active.id==='confirm'||active.id==='doubleBeat'?active.id:state?.modeId;
       const directionUp=state?.direction?state.direction==='up':state?.id==='volume'?true:Math.floor(t/1.8)%2===0;
       const directionKey=`${effectiveMode==='directional'}:${directionUp}`;
       if(directionKey!==lastDirectionKey){directionHint.classList.toggle('show',effectiveMode==='directional');directionHint.textContent=directionUp?'↑ 中心向上':'↓ 中心向下';lastDirectionKey=directionKey;}
 
-      if(effectiveMode==='audioMirror'){
-        const target=reduced?.48:.48+.22*Math.sin(t*4.1)+.12*Math.sin(t*7.4+1.1)+.07*Math.sin(t*12.3);
-        speakingLevel+=(target-speakingLevel)*(target>speakingLevel?.16:.055);
-      }
+      if(effectiveMode==='randomMirror')updateRandomMirror(t);
 
       ctx.save();ctx.lineCap='round';ctx.lineWidth=r*.5;ctx.strokeStyle=day?'rgba(15,22,39,.88)':'rgba(7,11,22,.95)';ctx.beginPath();ctx.moveTo(cx+r,cy-straight/2);ctx.lineTo(cx+r,cy+straight/2);ctx.arc(cx,cy+straight/2,r,0,Math.PI);ctx.lineTo(cx-r,cy-straight/2);ctx.arc(cx,cy-straight/2,r,Math.PI,Math.PI*2);ctx.closePath();ctx.stroke();ctx.restore();
       const envScale=environment==='day'?1:environment==='night'?.48:.72;
-      if(hardware24)drawHardwareLights(active,state,t,geometry,envScale,effectiveMode);
+      if(hardware20)drawHardwareLights(active,state,t,geometry,envScale);
       else drawIdealLights(active,state,t,geometry,envScale);
 
       const labelColor=day?'rgba(17,24,39,.42)':'rgba(220,229,255,.38)';
@@ -541,12 +677,12 @@
       stateList.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>selectState(Number(btn.dataset.index))));
     }
     function showDescriptor(item,eyebrow){modeName.textContent=item.name;modeSummary.textContent=item.summary;modeEyebrow.textContent=eyebrow;modeIndex.textContent=item.code;preview.style.setProperty('--mode-color',item.color);specs.innerHTML=item.specs.map(s=>`<span class="spec-chip">${s}</span>`).join('');}
-    function resetPreview(){startedAt=performance.now();speakingLevel=.45;lastTimecodePaint=-Infinity;}
+    function resetPreview(){startedAt=performance.now();randomWaveLevel=.45;randomWaveTarget=.56;nextRandomTargetAt=0;lastRandomWaveAt=0;randomSeed=(Date.now()^Math.floor(performance.now()*1000))>>>0;lastTimecodePaint=-Infinity;}
     function selectMode(index){activeKind='mode';selected=index;resetPreview();const m=modes[index];showDescriptor(m,m.eyebrow);renderModes();renderStates();requestDraw();}
     function selectState(index){activeKind='state';selectedState=index;resetPreview();const s=states[index];showDescriptor(s,`${s.mapping} · Typical state`);renderModes();renderStates();requestDraw();}
     document.getElementById('replay').addEventListener('click',()=>{resetPreview();requestDraw();});
     document.getElementById('reducedMotion').addEventListener('click',e=>{reduced=!reduced;e.currentTarget.classList.toggle('on',reduced);e.currentTarget.setAttribute('aria-checked',String(reduced));resetPreview();requestDraw();});
-    document.getElementById('hardware24').addEventListener('click',e=>{hardware24=!hardware24;e.currentTarget.classList.toggle('on',hardware24);e.currentTarget.setAttribute('aria-checked',String(hardware24));requestDraw();});
+    document.getElementById('hardware20').addEventListener('click',e=>{hardware20=!hardware20;e.currentTarget.classList.toggle('on',hardware20);e.currentTarget.setAttribute('aria-checked',String(hardware20));requestDraw();});
     document.querySelectorAll('#environment button').forEach(btn=>btn.addEventListener('click',()=>{environment=btn.dataset.environment;document.body.classList.toggle('day',environment==='day');document.querySelectorAll('#environment button').forEach(x=>x.classList.toggle('active',x===btn));requestDraw();}));
     document.querySelectorAll('#speed button').forEach(btn=>btn.addEventListener('click',()=>{playback=Number(btn.dataset.speed);resetPreview();document.querySelectorAll('#speed button').forEach(x=>x.classList.toggle('active',x===btn));requestDraw();}));
     document.addEventListener('visibilitychange',()=>{if(document.hidden){if(framePending)cancelAnimationFrame(animationFrame);framePending=false;}else requestDraw();});
