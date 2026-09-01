@@ -248,6 +248,10 @@
 
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const lightCanvas = document.createElement('canvas');
+    const lightCtx = lightCanvas.getContext('2d');
+    const bloomCanvas = document.createElement('canvas');
+    const bloomCtx = bloomCanvas.getContext('2d');
     const modeList = document.getElementById('modeList');
     const stateList = document.getElementById('stateList');
     const modeName = document.getElementById('modeName');
@@ -267,7 +271,11 @@
     let playback = 1;
     let startedAt = performance.now();
     let animationFrame = 0;
+    let framePending = false;
     let speakingLevel = .45;
+    let geometryCache = null;
+    let lastTimecodePaint = -Infinity;
+    let lastDirectionKey = '';
 
     function mix(a,b,t) { t=Math.max(0,Math.min(1,t)); return a.map((v,i)=>Math.round(v+(b[i]-v)*t)); }
     function smoothstep(a,b,x) { const t=Math.max(0,Math.min(1,(x-a)/(b-a))); return t*t*(3-2*t); }
@@ -282,6 +290,56 @@
       d-=Math.PI*r;
       if(d<=straight) return {x:cx-r,y:cy+straight/2-d};
       d-=straight; const a=Math.PI+d/r; return{x:cx+Math.cos(a)*r,y:cy-straight/2+Math.sin(a)*r};
+    }
+
+    function geometryFor(w,h) {
+      const key=`${Math.round(w)}:${Math.round(h)}`;
+      if(geometryCache?.key===key)return geometryCache;
+      const cx=w*.5,cy=h*.46,r=Math.min(w*.16,h*.13),straight=Math.min(h*.34,h-r*2-88),total=2*straight+2*Math.PI*r;
+      const e=(straight/2)/total,wAnchor=(e+.5)%1,n=(e-.25+1)%1,s=(e+.25)%1,anchors={e,w:wAnchor,n,s};
+      const idealPositions=Array.from({length:180},(_,i)=>capsulePoint(i/180,cx,cy,r,straight));
+      const ledUs=Array.from({length:24},(_,i)=>(n+i/24)%1);
+      const diffuserPositions=Array.from({length:120},(_,i)=>capsulePoint((n+i/120)%1,cx,cy,r,straight));
+      const padding=Math.max(24,Math.min(34,total/24)),left=Math.floor(cx-r-padding),top=Math.floor(cy-straight/2-r-padding),right=Math.ceil(cx+r+padding),bottom=Math.ceil(cy+straight/2+r+padding);
+      const lightBounds={x:left,y:top,width:right-left,height:bottom-top};
+      geometryCache={key,w,h,cx,cy,r,straight,total,anchors,idealPositions,ledUs,diffuserPositions,lightBounds};
+      return geometryCache;
+    }
+
+    function prepareLightLayer(bounds) {
+      const width=Math.max(1,bounds.width),height=Math.max(1,bounds.height);
+      if(lightCanvas.width!==width||lightCanvas.height!==height){lightCanvas.width=width;lightCanvas.height=height;}
+      lightCtx.setTransform(1,0,0,1,0,0);lightCtx.clearRect(0,0,width,height);lightCtx.globalCompositeOperation='lighter';
+    }
+
+    function prepareBloomLayer(bounds) {
+      const width=Math.max(1,bounds.width),height=Math.max(1,bounds.height);
+      if(bloomCanvas.width!==width||bloomCanvas.height!==height){bloomCanvas.width=width;bloomCanvas.height=height;}
+      bloomCtx.setTransform(1,0,0,1,0,0);bloomCtx.clearRect(0,0,width,height);bloomCtx.globalCompositeOperation='lighter';
+    }
+
+    function drawLightSource(pos,color,intensity,radius,bounds) {
+      if(intensity<.003)return;
+      lightCtx.fillStyle=colorCss(color,intensity);lightCtx.beginPath();lightCtx.arc(pos.x-bounds.x,pos.y-bounds.y,radius,0,Math.PI*2);lightCtx.fill();
+    }
+
+    function drawBloomSource(pos,color,intensity,radius,bounds) {
+      if(intensity<.003)return;
+      bloomCtx.fillStyle=colorCss(color,intensity);bloomCtx.beginPath();bloomCtx.arc(pos.x-bounds.x,pos.y-bounds.y,radius,0,Math.PI*2);bloomCtx.fill();
+    }
+
+    function compositeLightLayer(bounds,blurPx,coreAlpha) {
+      ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.94;
+      if('filter' in ctx)ctx.filter=`blur(${blurPx.toFixed(1)}px)`;
+      ctx.drawImage(lightCanvas,bounds.x,bounds.y,bounds.width,bounds.height);
+      if('filter' in ctx)ctx.filter='none';
+      ctx.globalAlpha=coreAlpha;ctx.drawImage(lightCanvas,bounds.x,bounds.y,bounds.width,bounds.height);ctx.restore();
+    }
+
+    function compositeBloomLayer(bounds,blurPx,opacity) {
+      ctx.save();ctx.globalCompositeOperation='lighter';ctx.globalAlpha=opacity;
+      if('filter' in ctx)ctx.filter=`blur(${blurPx.toFixed(1)}px)`;
+      ctx.drawImage(bloomCanvas,bounds.x,bounds.y,bounds.width,bounds.height);ctx.restore();
     }
 
     function pairDistanceToCenter(u,anchors) {
@@ -376,12 +434,14 @@
       return activeKind==='mode'?parameters(active.id,u,t,anchors):stateParameters(state,u,t,anchors);
     }
 
-    function drawIdealLights(active,state,t,anchors,cx,cy,r,straight,envScale) {
+    function drawIdealLights(active,state,t,geometry,envScale) {
+      const {total,anchors,idealPositions,lightBounds}=geometry;
+      prepareLightLayer(lightBounds);
       for(let i=0;i<180;i++){
-        const u=i/180,pos=capsulePoint(u,cx,cy,r,straight),light=activeLight(active,state,u,t,anchors),a=light.intensity*envScale;
-        if(a<.003)continue;
-        ctx.save();ctx.globalCompositeOperation='lighter';ctx.shadowColor=colorCss(light.color,a);ctx.shadowBlur=12+a*24;ctx.fillStyle=colorCss(light.color,a);ctx.beginPath();ctx.arc(pos.x,pos.y,2.8+a*1.8,0,Math.PI*2);ctx.fill();ctx.restore();
+        const u=i/180,light=activeLight(active,state,u,t,anchors),a=light.intensity*envScale;
+        drawLightSource(idealPositions[i],light.color,a,2.7+a*1.5,lightBounds);
       }
+      compositeLightLayer(lightBounds,Math.max(7,Math.min(11,total/82)),.72);
     }
 
     function sampleHardwareLed(active,state,t,anchors,u,pitch,effectiveMode) {
@@ -397,40 +457,43 @@
       return {u,intensity,color};
     }
 
-    function drawHardwareLights(active,state,t,anchors,cx,cy,r,straight,envScale,effectiveMode) {
-      const count=24,pitch=1/count,sigma=.60*pitch,cutoff=2.05*pitch;
-      const leds=Array.from({length:count},(_,index)=>{
-        const u=(anchors.n+index*pitch)%1;
-        return sampleHardwareLed(active,state,t,anchors,u,pitch,effectiveMode);
-      });
-
-      // The cover is the visible emitter: reconstruct a continuous band from 24 discrete sources.
-      ctx.save();ctx.globalCompositeOperation='lighter';
-      for(let i=0;i<240;i++){
-        const u=i/240,pos=capsulePoint(u,cx,cy,r,straight);
-        let energy=0,red=0,green=0,blue=0;
-        for(const led of leds){
-          const distance=circularDistance(u,led.u);
-          if(distance>cutoff||led.intensity<=0)continue;
-          const kernel=Math.exp(-.5*Math.pow(distance/sigma,2)),weighted=led.intensity*kernel;
-          energy+=weighted;red+=led.color[0]*weighted;green+=led.color[1]*weighted;blue+=led.color[2]*weighted;
-        }
+    function drawHardwareLights(active,state,t,geometry,envScale,effectiveMode) {
+      const {total,anchors,ledUs,diffuserPositions,lightBounds}=geometry,pitch=1/24;
+      const leds=new Array(24),sourceRadius=Math.max(2.7,Math.min(4.2,total/120*.58));
+      let peakVisible=0;
+      prepareLightLayer(lightBounds);prepareBloomLayer(lightBounds);
+      for(let i=0;i<24;i++){
+        leds[i]=sampleHardwareLed(active,state,t,anchors,ledUs[i],pitch,effectiveMode);
+      }
+      // Reconstruct only what the diffuser can show: five optical samples between
+      // each adjacent physical LED, derived exclusively from those two LED values.
+      for(let i=0;i<120;i++){
+        const phase=i/5,leftIndex=Math.floor(phase),fraction=phase-leftIndex,rightIndex=(leftIndex+1)%24;
+        const left=leds[leftIndex],right=leds[rightIndex],leftEnergy=left.intensity*(1-fraction),rightEnergy=right.intensity*fraction,energy=leftEnergy+rightEnergy;
         if(energy<.002)continue;
-        const color=[Math.round(red/energy),Math.round(green/energy),Math.round(blue/energy)];
-        const a=(1-Math.exp(-energy*.88))*envScale;
-        ctx.shadowColor=colorCss(color,a*.92);ctx.shadowBlur=17+a*30;ctx.fillStyle=colorCss(color,a*.76);ctx.beginPath();ctx.arc(pos.x,pos.y,3.7+a*2.2,0,Math.PI*2);ctx.fill();
+        const color=[Math.round((left.color[0]*leftEnergy+right.color[0]*rightEnergy)/energy),Math.round((left.color[1]*leftEnergy+right.color[1]*rightEnergy)/energy),Math.round((left.color[2]*leftEnergy+right.color[2]*rightEnergy)/energy)];
+        const a=(1-Math.exp(-energy*1.45))*envScale,bloomEnergy=Math.min(1,Math.pow(a,1.5)*1.7);
+        peakVisible=Math.max(peakVisible,a);
+        drawLightSource(diffuserPositions[i],color,a,sourceRadius+a*.9,lightBounds);
+        drawBloomSource(diffuserPositions[i],color,bloomEnergy,sourceRadius*(1.15+a*2.1),lightBounds);
       }
-      ctx.restore();
+      const baseBlur=Math.max(7,Math.min(11,total/24*.30));
+      // Bright samples contribute non-linearly to a wider halo; the core remains continuous.
+      if(peakVisible>.003)compositeBloomLayer(lightBounds,baseBlur+peakVisible*18,.9);
+      compositeLightLayer(lightBounds,baseBlur,.60);
+    }
 
-      // A restrained hotspot layer hints at the emitters without exposing naked LED dots.
-      ctx.save();ctx.globalCompositeOperation='lighter';
-      for(const led of leds){
-        const a=led.intensity*envScale;
-        if(a<.004)continue;
-        const pos=capsulePoint(led.u,cx,cy,r,straight);
-        ctx.shadowColor=colorCss(led.color,a*.14);ctx.shadowBlur=8+a*12;ctx.fillStyle=colorCss(led.color,a*.10);ctx.beginPath();ctx.arc(pos.x,pos.y,3.2+a,0,Math.PI*2);ctx.fill();
-      }
-      ctx.restore();
+    function previewNeedsAnimation(active,state,t) {
+      if(activeKind==='mode')return active.id==='off'?t<.22:active.id!=='steady';
+      if(state?.id==='frameOff'||state?.id==='mute')return t<.22;
+      if(state?.id==='listening')return t<.72;
+      return true;
+    }
+
+    function requestDraw() {
+      if(framePending||document.hidden)return;
+      framePending=true;
+      animationFrame=requestAnimationFrame(now=>{framePending=false;draw(now);});
     }
 
     function draw(now) {
@@ -441,17 +504,16 @@
       const day=document.body.classList.contains('day');
       const aura=ctx.createRadialGradient(w*.5,h*.46,20,w*.5,h*.48,h*.56);
       aura.addColorStop(0,day?'rgba(73,104,255,.12)':'rgba(64,92,180,.2)');aura.addColorStop(1,'rgba(4,8,18,0)');ctx.fillStyle=aura;ctx.fillRect(0,0,w,h);
-      const cx=w*.5,cy=h*.46,r=Math.min(w*.16,h*.13),straight=Math.min(h*.34,h-r*2-88),total=2*straight+2*Math.PI*r;
-      const e=(straight/2)/total,wAnchor=(e+.5)%1,n=(e-.25+1)%1,s=(e+.25)%1,anchors={e,w:wAnchor,n,s};
+      const geometry=geometryFor(w,h),{cx,cy,r,straight,anchors}=geometry;
       const t=(now-startedAt)/1000*playback;
-      timecode.textContent=`${String(Math.floor(t/60)).padStart(2,'0')}:${String(Math.floor(t%60)).padStart(2,'0')}.${String(Math.floor(t%1*1000)).padStart(3,'0')}`;
+      if(now-lastTimecodePaint>=50){timecode.textContent=`${String(Math.floor(t/60)).padStart(2,'0')}:${String(Math.floor(t%60)).padStart(2,'0')}.${String(Math.floor(t%1*1000)).padStart(3,'0')}`;lastTimecodePaint=now;}
       const active=activeKind==='mode'?modes[selected]:states[selectedState];
       const state=activeKind==='state'?active:null;
       const volumePhase=state?.id==='volume'?t%3:null;
       const effectiveMode=state?.id==='listening'?(t<.70?'bloom':'steady'):state?.id==='volume'?(volumePhase<.28?'directional':'progress'):active.id==='off'||active.id==='steady'||active.id==='lowBreath'||active.id==='highBreath'||active.id==='bloom'||active.id==='ripple'||active.id==='comet'||active.id==='twinComet'||active.id==='audioMirror'||active.id==='directional'||active.id==='progress'||active.id==='confirm'||active.id==='doubleBeat'?active.id:state?.modeId;
       const directionUp=state?.direction?state.direction==='up':state?.id==='volume'?true:Math.floor(t/1.8)%2===0;
-      directionHint.classList.toggle('show',effectiveMode==='directional');
-      directionHint.textContent=directionUp?'↑ 中心向上':'↓ 中心向下';
+      const directionKey=`${effectiveMode==='directional'}:${directionUp}`;
+      if(directionKey!==lastDirectionKey){directionHint.classList.toggle('show',effectiveMode==='directional');directionHint.textContent=directionUp?'↑ 中心向上':'↓ 中心向下';lastDirectionKey=directionKey;}
 
       if(effectiveMode==='audioMirror'){
         const target=reduced?.48:.48+.22*Math.sin(t*4.1)+.12*Math.sin(t*7.4+1.1)+.07*Math.sin(t*12.3);
@@ -460,14 +522,14 @@
 
       ctx.save();ctx.lineCap='round';ctx.lineWidth=r*.5;ctx.strokeStyle=day?'rgba(15,22,39,.88)':'rgba(7,11,22,.95)';ctx.beginPath();ctx.moveTo(cx+r,cy-straight/2);ctx.lineTo(cx+r,cy+straight/2);ctx.arc(cx,cy+straight/2,r,0,Math.PI);ctx.lineTo(cx-r,cy-straight/2);ctx.arc(cx,cy-straight/2,r,Math.PI,Math.PI*2);ctx.closePath();ctx.stroke();ctx.restore();
       const envScale=environment==='day'?1:environment==='night'?.48:.72;
-      if(hardware24)drawHardwareLights(active,state,t,anchors,cx,cy,r,straight,envScale,effectiveMode);
-      else drawIdealLights(active,state,t,anchors,cx,cy,r,straight,envScale);
+      if(hardware24)drawHardwareLights(active,state,t,geometry,envScale,effectiveMode);
+      else drawIdealLights(active,state,t,geometry,envScale);
 
       const labelColor=day?'rgba(17,24,39,.42)':'rgba(220,229,255,.38)';
       ctx.save();ctx.fillStyle=labelColor;ctx.font='600 9px ui-monospace, monospace';ctx.textAlign='center';ctx.fillText('N',cx,cy-straight/2-r-18);ctx.fillText('S',cx,cy+straight/2+r+23);ctx.textAlign='left';ctx.fillText('E',cx+r+18,cy+3);ctx.textAlign='right';ctx.fillText('W',cx-r-18,cy+3);ctx.restore();
 
       ctx.save();ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=18;ctx.fillStyle=day?'rgba(250,252,255,.98)':'rgba(8,12,23,.98)';ctx.strokeStyle=day?'rgba(83,104,150,.34)':'rgba(169,188,235,.34)';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(cx,cy,22,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.shadowBlur=0;ctx.fillStyle=active.color;ctx.globalAlpha=.78;ctx.beginPath();ctx.arc(cx,cy-8,2.4,0,Math.PI*2);ctx.fill();ctx.globalAlpha=.62;ctx.fillStyle=day?'#111827':'#eef3ff';ctx.font='650 10px ui-monospace, monospace';ctx.textAlign='center';ctx.fillText(effectiveMode==='directional'?(directionUp?'↑':'↓'):'C',cx,cy+5);ctx.restore();
-      animationFrame=requestAnimationFrame(draw);
+      if(previewNeedsAnimation(active,state,t))requestDraw();
     }
 
     function renderModes(){
@@ -479,15 +541,16 @@
       stateList.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>selectState(Number(btn.dataset.index))));
     }
     function showDescriptor(item,eyebrow){modeName.textContent=item.name;modeSummary.textContent=item.summary;modeEyebrow.textContent=eyebrow;modeIndex.textContent=item.code;preview.style.setProperty('--mode-color',item.color);specs.innerHTML=item.specs.map(s=>`<span class="spec-chip">${s}</span>`).join('');}
-    function resetPreview(){startedAt=performance.now();speakingLevel=.45;}
-    function selectMode(index){activeKind='mode';selected=index;resetPreview();const m=modes[index];showDescriptor(m,m.eyebrow);renderModes();renderStates();}
-    function selectState(index){activeKind='state';selectedState=index;resetPreview();const s=states[index];showDescriptor(s,`${s.mapping} · Typical state`);renderModes();renderStates();}
-    document.getElementById('replay').addEventListener('click',()=>{startedAt=performance.now();speakingLevel=.45;});
-    document.getElementById('reducedMotion').addEventListener('click',e=>{reduced=!reduced;e.currentTarget.classList.toggle('on',reduced);e.currentTarget.setAttribute('aria-checked',String(reduced));startedAt=performance.now();});
-    document.getElementById('hardware24').addEventListener('click',e=>{hardware24=!hardware24;e.currentTarget.classList.toggle('on',hardware24);e.currentTarget.setAttribute('aria-checked',String(hardware24));});
-    document.querySelectorAll('#environment button').forEach(btn=>btn.addEventListener('click',()=>{environment=btn.dataset.environment;document.body.classList.toggle('day',environment==='day');document.querySelectorAll('#environment button').forEach(x=>x.classList.toggle('active',x===btn));}));
-    document.querySelectorAll('#speed button').forEach(btn=>btn.addEventListener('click',()=>{playback=Number(btn.dataset.speed);startedAt=performance.now();document.querySelectorAll('#speed button').forEach(x=>x.classList.toggle('active',x===btn));}));
-    selectState(selectedState);animationFrame=requestAnimationFrame(draw);
+    function resetPreview(){startedAt=performance.now();speakingLevel=.45;lastTimecodePaint=-Infinity;}
+    function selectMode(index){activeKind='mode';selected=index;resetPreview();const m=modes[index];showDescriptor(m,m.eyebrow);renderModes();renderStates();requestDraw();}
+    function selectState(index){activeKind='state';selectedState=index;resetPreview();const s=states[index];showDescriptor(s,`${s.mapping} · Typical state`);renderModes();renderStates();requestDraw();}
+    document.getElementById('replay').addEventListener('click',()=>{resetPreview();requestDraw();});
+    document.getElementById('reducedMotion').addEventListener('click',e=>{reduced=!reduced;e.currentTarget.classList.toggle('on',reduced);e.currentTarget.setAttribute('aria-checked',String(reduced));resetPreview();requestDraw();});
+    document.getElementById('hardware24').addEventListener('click',e=>{hardware24=!hardware24;e.currentTarget.classList.toggle('on',hardware24);e.currentTarget.setAttribute('aria-checked',String(hardware24));requestDraw();});
+    document.querySelectorAll('#environment button').forEach(btn=>btn.addEventListener('click',()=>{environment=btn.dataset.environment;document.body.classList.toggle('day',environment==='day');document.querySelectorAll('#environment button').forEach(x=>x.classList.toggle('active',x===btn));requestDraw();}));
+    document.querySelectorAll('#speed button').forEach(btn=>btn.addEventListener('click',()=>{playback=Number(btn.dataset.speed);resetPreview();document.querySelectorAll('#speed button').forEach(x=>x.classList.toggle('active',x===btn));requestDraw();}));
+    document.addEventListener('visibilitychange',()=>{if(document.hidden){if(framePending)cancelAnimationFrame(animationFrame);framePending=false;}else requestDraw();});
+    selectState(selectedState);
     addEventListener('beforeunload',()=>cancelAnimationFrame(animationFrame));
   </script>
 </body>
