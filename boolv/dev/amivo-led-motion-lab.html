@@ -175,6 +175,10 @@
             <span class="toggle-copy"><strong>低动态模式</strong><small>用静态与淡入淡出替代大范围运动</small></span>
             <button class="switch" id="reducedMotion" type="button" role="switch" aria-checked="false" aria-label="低动态模式"></button>
           </div>
+          <div class="toggle-row">
+            <span class="toggle-copy"><strong>24 颗实灯 + 柔光罩</strong><small>用真实灯位驱动，再重建罩体中的连续光带</small></span>
+            <button class="switch" id="hardware24" type="button" role="switch" aria-checked="false" aria-label="24 颗实灯与柔光罩模拟"></button>
+          </div>
         </section>
         <section class="section">
           <p class="section-title">播放速度</p>
@@ -197,7 +201,7 @@
             <div class="swatch" style="--swatch:#ffb240" title="暖琥珀"></div>
           </div>
         </section>
-        <p class="footnote">模式与状态分层预览：M00–M12 是纯动画模式，S01–S16 是需求文档 5.1 的典型状态映射。中心圆形控件是摇杆 C；不模拟任何现有硬件或固件限制。</p>
+        <p class="footnote">模式与状态分层预览：M00–M12 是纯动画模式，S01–S16 是需求文档 5.1 的典型状态映射。中心圆形控件是摇杆 C。开启 24 灯模拟后，动画只驱动 N/S 各 1 颗、左右各 11 颗实体灯，再由跑道形柔光罩重建可见光带；它不代表当前固件能力。</p>
       </aside>
     </main>
   </div>
@@ -259,6 +263,7 @@
     let selectedState = 6;
     let environment = 'night';
     let reduced = false;
+    let hardware24 = false;
     let playback = 1;
     let startedAt = performance.now();
     let animationFrame = 0;
@@ -312,10 +317,10 @@
       } else if(mode==='bloom') {
         const phase=t%3, p=phase<.42?smoothstep(0,.42,phase):phase<1.18?1:phase<1.60?1-smoothstep(1.18,1.60,phase):0;
         const extent=.018+p*(reduced?.075:.232);
-        if(pairDistance<extent){const edge=1-pairDistance/Math.max(.001,extent);intensity=(.34+edge*.36)*(.35+.65*p);}
+        if(pairDistance<=extent){const edge=1-pairDistance/Math.max(.001,extent);intensity=(.34+edge*.36)*(.35+.65*p);}
       } else if(mode==='ripple') {
-        const p=(t%2.7)/.52;
-        if(p<1){const head=.012+smoothstep(0,1,p)*(reduced?.085:.228);intensity=Math.exp(-Math.pow((pairDistance-head)/.019,2))*Math.sin(Math.PI*p)*.72;}
+        const phase=t%2.7,p=Math.min(1,phase/.52);
+        if(phase<.64){const head=.012+smoothstep(0,1,p)*(reduced?.085:.238),env=smoothstep(0,.08,phase)*(1-smoothstep(.52,.64,phase));intensity=Math.exp(-Math.pow((pairDistance-head)/.019,2))*env*.72;}
       } else if(mode==='comet') {
         if(reduced){intensity=pairDistance<.075?.5:0;color=COLORS.blue;}
         else{const head=(e+t/1.65)%1,behind=(head-u+1)%1;if(behind<=.22){const n=behind/.22;intensity=Math.pow(1-n,1.75)*.82;color=mix(COLORS.blue,COLORS.cyan,n*.7);}}
@@ -326,8 +331,8 @@
         const level=reduced?.48:speakingLevel,extent=.045+level*(reduced?.12:.205);
         if(pairDistance<extent){const edge=1-pairDistance/extent;intensity=(.34+edge*.48)*(reduced?.72:1);color=mix(COLORS.blueViolet,COLORS.violet,level*.82);}
       } else if(mode==='directional') {
-        const slot=Math.floor(t/1.8),up=options.direction?options.direction==='up':slot%2===0,p=(t%1.8)/.28;
-        if(p<1){const travel=.018+smoothstep(0,1,p)*.225,heads=up?[(e-travel+1)%1,(w+travel)%1]:[(e+travel)%1,(w-travel+1)%1];intensity=pairGlow(heads,.022)*Math.sin(Math.PI*p)*.96;color=COLORS.white;}
+        const slot=Math.floor(t/1.8),up=options.direction?options.direction==='up':slot%2===0,phase=t%1.8,p=Math.min(1,phase/.28);
+        if(phase<.38){const travel=.018+smoothstep(0,1,p)*.232,heads=up?[(e-travel+1)%1,(w+travel)%1]:[(e+travel)%1,(w-travel+1)%1],env=smoothstep(0,.055,phase)*(1-smoothstep(.28,.38,phase));intensity=pairGlow(heads,.022)*env*.96;color=COLORS.white;}
       } else if(mode==='progress') {
         const progress=Number.isFinite(options.progress)?options.progress:(1-Math.cos((t%5)/5*Math.PI*2))/2,extent=.008+progress*.242;
         if(pairDistance<=extent){const edge=1-pairDistance/Math.max(.01,extent);intensity=.42+edge*.18;color=COLORS.orange;}
@@ -355,16 +360,77 @@
       }
       if(state.id==='listening'){
         if(t<.42)return parameters('bloom',u,t,anchors,{color:COLORS.cyan});
-        if(t<.70){const extent=.232-smoothstep(.42,.70,t)*.154;return symmetricFillLight(u,anchors,extent,.68,COLORS.cyan);}
+        if(t<.70){const extent=.25-smoothstep(.42,.70,t)*.172;return symmetricFillLight(u,anchors,extent,.68,COLORS.cyan);}
         return parameters('steady',u,t-.70,anchors,{color:COLORS.cyan});
       }
       if(state.id==='volume'){
         const phase=t%3;
-        if(phase<.28)return parameters('directional',u,phase,anchors,{direction:'up',color:COLORS.white});
-        if(phase<1.08){const env=smoothstep(.28,.40,phase)*(1-smoothstep(.90,1.08,phase));const light=parameters('progress',u,phase,anchors,{progress:.68,color:COLORS.white});light.intensity*=env;return light;}
+        if(phase<.38)return parameters('directional',u,phase,anchors,{direction:'up',color:COLORS.white});
+        if(phase<1.18){const env=smoothstep(.38,.50,phase)*(1-smoothstep(1,1.18,phase));const light=parameters('progress',u,phase,anchors,{progress:.68,color:COLORS.white});light.intensity*=env;return light;}
         return {intensity:0,color:COLORS.white};
       }
       return parameters(state.modeId,u,t,anchors,{direction:state.direction,color:tone});
+    }
+
+    function activeLight(active,state,u,t,anchors) {
+      return activeKind==='mode'?parameters(active.id,u,t,anchors):stateParameters(state,u,t,anchors);
+    }
+
+    function drawIdealLights(active,state,t,anchors,cx,cy,r,straight,envScale) {
+      for(let i=0;i<180;i++){
+        const u=i/180,pos=capsulePoint(u,cx,cy,r,straight),light=activeLight(active,state,u,t,anchors),a=light.intensity*envScale;
+        if(a<.003)continue;
+        ctx.save();ctx.globalCompositeOperation='lighter';ctx.shadowColor=colorCss(light.color,a);ctx.shadowBlur=12+a*24;ctx.fillStyle=colorCss(light.color,a);ctx.beginPath();ctx.arc(pos.x,pos.y,2.8+a*1.8,0,Math.PI*2);ctx.fill();ctx.restore();
+      }
+    }
+
+    function sampleHardwareLed(active,state,t,anchors,u,pitch,effectiveMode) {
+      const movingModes=['bloom','ripple','comet','twinComet','audioMirror','directional','progress'];
+      if(!movingModes.includes(effectiveMode))return {u,...activeLight(active,state,u,t,anchors)};
+      const offsets=[-.38,-.18,0,.18,.38],weights=[.08,.16,.52,.16,.08];
+      let intensity=0,red=0,green=0,blue=0,colorEnergy=0;
+      for(let i=0;i<offsets.length;i++){
+        const light=activeLight(active,state,(u+offsets[i]*pitch+1)%1,t,anchors),weighted=light.intensity*weights[i];
+        intensity+=weighted;colorEnergy+=weighted;red+=light.color[0]*weighted;green+=light.color[1]*weighted;blue+=light.color[2]*weighted;
+      }
+      const color=colorEnergy>.0001?[Math.round(red/colorEnergy),Math.round(green/colorEnergy),Math.round(blue/colorEnergy)]:COLORS.cyan;
+      return {u,intensity,color};
+    }
+
+    function drawHardwareLights(active,state,t,anchors,cx,cy,r,straight,envScale,effectiveMode) {
+      const count=24,pitch=1/count,sigma=.60*pitch,cutoff=2.05*pitch;
+      const leds=Array.from({length:count},(_,index)=>{
+        const u=(anchors.n+index*pitch)%1;
+        return sampleHardwareLed(active,state,t,anchors,u,pitch,effectiveMode);
+      });
+
+      // The cover is the visible emitter: reconstruct a continuous band from 24 discrete sources.
+      ctx.save();ctx.globalCompositeOperation='lighter';
+      for(let i=0;i<240;i++){
+        const u=i/240,pos=capsulePoint(u,cx,cy,r,straight);
+        let energy=0,red=0,green=0,blue=0;
+        for(const led of leds){
+          const distance=circularDistance(u,led.u);
+          if(distance>cutoff||led.intensity<=0)continue;
+          const kernel=Math.exp(-.5*Math.pow(distance/sigma,2)),weighted=led.intensity*kernel;
+          energy+=weighted;red+=led.color[0]*weighted;green+=led.color[1]*weighted;blue+=led.color[2]*weighted;
+        }
+        if(energy<.002)continue;
+        const color=[Math.round(red/energy),Math.round(green/energy),Math.round(blue/energy)];
+        const a=(1-Math.exp(-energy*.88))*envScale;
+        ctx.shadowColor=colorCss(color,a*.92);ctx.shadowBlur=17+a*30;ctx.fillStyle=colorCss(color,a*.76);ctx.beginPath();ctx.arc(pos.x,pos.y,3.7+a*2.2,0,Math.PI*2);ctx.fill();
+      }
+      ctx.restore();
+
+      // A restrained hotspot layer hints at the emitters without exposing naked LED dots.
+      ctx.save();ctx.globalCompositeOperation='lighter';
+      for(const led of leds){
+        const a=led.intensity*envScale;
+        if(a<.004)continue;
+        const pos=capsulePoint(led.u,cx,cy,r,straight);
+        ctx.shadowColor=colorCss(led.color,a*.14);ctx.shadowBlur=8+a*12;ctx.fillStyle=colorCss(led.color,a*.10);ctx.beginPath();ctx.arc(pos.x,pos.y,3.2+a,0,Math.PI*2);ctx.fill();
+      }
+      ctx.restore();
     }
 
     function draw(now) {
@@ -394,10 +460,8 @@
 
       ctx.save();ctx.lineCap='round';ctx.lineWidth=r*.5;ctx.strokeStyle=day?'rgba(15,22,39,.88)':'rgba(7,11,22,.95)';ctx.beginPath();ctx.moveTo(cx+r,cy-straight/2);ctx.lineTo(cx+r,cy+straight/2);ctx.arc(cx,cy+straight/2,r,0,Math.PI);ctx.lineTo(cx-r,cy-straight/2);ctx.arc(cx,cy-straight/2,r,Math.PI,Math.PI*2);ctx.closePath();ctx.stroke();ctx.restore();
       const envScale=environment==='day'?1:environment==='night'?.48:.72;
-      for(let i=0;i<180;i++){
-        const u=i/180,pos=capsulePoint(u,cx,cy,r,straight),light=activeKind==='mode'?parameters(active.id,u,t,anchors):stateParameters(active,u,t,anchors);let a=light.intensity*envScale;
-        if(a<.003)continue;ctx.save();ctx.globalCompositeOperation='lighter';ctx.shadowColor=colorCss(light.color,a);ctx.shadowBlur=12+a*24;ctx.fillStyle=colorCss(light.color,a);ctx.beginPath();ctx.arc(pos.x,pos.y,2.8+a*1.8,0,Math.PI*2);ctx.fill();ctx.restore();
-      }
+      if(hardware24)drawHardwareLights(active,state,t,anchors,cx,cy,r,straight,envScale,effectiveMode);
+      else drawIdealLights(active,state,t,anchors,cx,cy,r,straight,envScale);
 
       const labelColor=day?'rgba(17,24,39,.42)':'rgba(220,229,255,.38)';
       ctx.save();ctx.fillStyle=labelColor;ctx.font='600 9px ui-monospace, monospace';ctx.textAlign='center';ctx.fillText('N',cx,cy-straight/2-r-18);ctx.fillText('S',cx,cy+straight/2+r+23);ctx.textAlign='left';ctx.fillText('E',cx+r+18,cy+3);ctx.textAlign='right';ctx.fillText('W',cx-r-18,cy+3);ctx.restore();
@@ -420,6 +484,7 @@
     function selectState(index){activeKind='state';selectedState=index;resetPreview();const s=states[index];showDescriptor(s,`${s.mapping} · Typical state`);renderModes();renderStates();}
     document.getElementById('replay').addEventListener('click',()=>{startedAt=performance.now();speakingLevel=.45;});
     document.getElementById('reducedMotion').addEventListener('click',e=>{reduced=!reduced;e.currentTarget.classList.toggle('on',reduced);e.currentTarget.setAttribute('aria-checked',String(reduced));startedAt=performance.now();});
+    document.getElementById('hardware24').addEventListener('click',e=>{hardware24=!hardware24;e.currentTarget.classList.toggle('on',hardware24);e.currentTarget.setAttribute('aria-checked',String(hardware24));});
     document.querySelectorAll('#environment button').forEach(btn=>btn.addEventListener('click',()=>{environment=btn.dataset.environment;document.body.classList.toggle('day',environment==='day');document.querySelectorAll('#environment button').forEach(x=>x.classList.toggle('active',x===btn));}));
     document.querySelectorAll('#speed button').forEach(btn=>btn.addEventListener('click',()=>{playback=Number(btn.dataset.speed);startedAt=performance.now();document.querySelectorAll('#speed button').forEach(x=>x.classList.toggle('active',x===btn));}));
     selectState(selectedState);animationFrame=requestAnimationFrame(draw);
